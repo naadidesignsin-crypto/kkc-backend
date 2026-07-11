@@ -1,0 +1,9 @@
+@"
+node_modules/
+dist/
+target/
+.env
+.idea/
+*.iml
+src/main/resources/application-local.yml
+"@ | Out-File -Encoding utf8 .gitignore

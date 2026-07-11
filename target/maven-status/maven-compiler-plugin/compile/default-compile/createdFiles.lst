@@ -1,0 +1,16 @@
+com\kkc\KkcBackendApplication.class
+com\kkc\kundali\controller\KundaliEnquiryController.class
+com\kkc\kundali\dto\KundaliStatusUpdateRequest.class
+com\kkc\kundali\dto\KundaliEnquiryRequest.class
+com\kkc\kundali\dto\KundaliEnquiryResponse.class
+com\kkc\kundali\service\KundaliEnquiryService.class
+com\kkc\kundali\common\ApiExceptionHandler.class
+com\kkc\kundali\controller\AdminKundaliController.class
+com\kkc\kundali\dto\KundaliEnquiry$KundaliEnquiryBuilder.class
+com\kkc\kundali\util\KundaliEnquiryStatus.class
+com\kkc\kundali\dto\KundaliEnquiry.class
+com\kkc\kundali\dto\KundaliStatusUpdateRequest$KundaliStatusUpdateRequestBuilder.class
+com\kkc\kundali\dto\KundaliEnquiryResponse$KundaliEnquiryResponseBuilder.class
+com\kkc\kundali\dto\KundaliEnquiryRequest$KundaliEnquiryRequestBuilder.class
+com\kkc\kundali\repository\KundaliEnquiryRepository.class
+com\kkc\kundali\util\ConsultationType.class
