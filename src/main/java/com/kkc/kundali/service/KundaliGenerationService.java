@@ -1,7 +1,9 @@
 package com.kkc.kundali.service;
 
-import com.kkc.kundali.dto.*;
 import com.kkc.kundali.dto.KundaliGenerateRequest;
+import com.kkc.kundali.dto.KundaliReportResponse;
+import com.kkc.kundali.dto.KundaliSummaryResponse;
+import com.kkc.kundali.dto.ProviderResult;
 import com.kkc.kundali.entity.KundaliReport;
 import com.kkc.kundali.mapper.KundaliSummaryMapper;
 import com.kkc.kundali.repository.KundaliReportRepository;
@@ -29,6 +31,12 @@ public class KundaliGenerationService {
     }
 
     public KundaliReportResponse generate(KundaliGenerateRequest request) {
+        KundaliReport existingReport = findExistingSuccessfulReport(request);
+
+        if (existingReport != null) {
+            return KundaliReportResponse.from(existingReport);
+        }
+
         KundaliReport report = KundaliReport.builder()
                 .fullName(clean(request.getFullName()))
                 .gender(cleanOptional(request.getGender()))
@@ -80,6 +88,55 @@ public class KundaliGenerationService {
                 .toList();
     }
 
+    public KundaliSummaryResponse findSummaryById(Long id) {
+        KundaliReport report = repository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Kundali report not found"));
+
+        return summaryMapper.from(report);
+    }
+
+    private KundaliReport findExistingSuccessfulReport(KundaliGenerateRequest request) {
+        if (request == null
+                || request.getDateOfBirth() == null
+                || request.getTimeOfBirth() == null) {
+            return null;
+        }
+
+        return repository
+                .findByDateOfBirthAndTimeOfBirthAndStatusOrderByCreatedAtDesc(
+                        request.getDateOfBirth(),
+                        request.getTimeOfBirth(),
+                        KundaliReportStatus.SUCCESS
+                )
+                .stream()
+                .filter(report -> sameText(report.getFullName(), request.getFullName()))
+                .filter(report -> sameText(report.getGender(), request.getGender()))
+                .filter(report -> sameText(report.getTimezone(), request.getTimezone()))
+                .filter(report -> sameNumber(report.getLatitude(), request.getLatitude()))
+                .filter(report -> sameNumber(report.getLongitude(), request.getLongitude()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private boolean sameText(String left, String right) {
+        String cleanLeft = cleanOptional(left);
+        String cleanRight = cleanOptional(right);
+
+        if (cleanLeft == null || cleanRight == null) {
+            return cleanLeft == null && cleanRight == null;
+        }
+
+        return cleanLeft.equalsIgnoreCase(cleanRight);
+    }
+
+    private boolean sameNumber(Double left, Double right) {
+        if (left == null || right == null) {
+            return false;
+        }
+
+        return Math.abs(left - right) < 0.000001;
+    }
+
     private String clean(String value) {
         return value == null ? null : value.trim();
     }
@@ -90,12 +147,5 @@ public class KundaliGenerationService {
         }
 
         return value.trim();
-    }
-
-    public KundaliSummaryResponse findSummaryById(Long id) {
-        KundaliReport report = repository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Kundali report not found"));
-
-        return summaryMapper.from(report);
     }
 }

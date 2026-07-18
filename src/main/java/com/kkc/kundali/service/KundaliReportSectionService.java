@@ -1,7 +1,8 @@
 package com.kkc.kundali.service;
 
-import com.kkc.kundali.dto.*;
 import com.kkc.kundali.dto.KundaliGenerateRequest;
+import com.kkc.kundali.dto.KundaliReportSectionResponse;
+import com.kkc.kundali.dto.ProviderResult;
 import com.kkc.kundali.entity.KundaliReport;
 import com.kkc.kundali.entity.KundaliReportSection;
 import com.kkc.kundali.repository.KundaliReportRepository;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class KundaliReportSectionService {
@@ -45,8 +47,18 @@ public class KundaliReportSectionService {
         KundaliReport report = reportRepository.findById(reportId)
                 .orElseThrow(() -> new IllegalArgumentException("Kundali report not found"));
 
-        KundaliReportSection section = sectionRepository
-                .findByReportIdAndSectionType(reportId, sectionType)
+        Optional<KundaliReportSection> existingSectionOptional =
+                sectionRepository.findByReportIdAndSectionType(reportId, sectionType);
+
+        if (existingSectionOptional.isPresent()) {
+            KundaliReportSection existingSection = existingSectionOptional.get();
+
+            if (isAlreadyGenerated(existingSection)) {
+                return KundaliReportSectionResponse.from(existingSection);
+            }
+        }
+
+        KundaliReportSection section = existingSectionOptional
                 .orElseGet(() -> KundaliReportSection.builder()
                         .reportId(reportId)
                         .sectionType(sectionType)
@@ -64,6 +76,7 @@ public class KundaliReportSectionService {
 
         try {
             KundaliGenerateRequest request = buildRequestFromReport(report);
+
             ProviderResult providerResult = providerClient.callEndpoint(
                     sectionType.getEndpointPath(),
                     request
@@ -94,6 +107,12 @@ public class KundaliReportSectionService {
                 .stream()
                 .map(KundaliReportSectionResponse::from)
                 .toList();
+    }
+
+    private boolean isAlreadyGenerated(KundaliReportSection section) {
+        return section.getStatus() == KundaliReportStatus.SUCCESS
+                && section.getResponseJson() != null
+                && !section.getResponseJson().isBlank();
     }
 
     private KundaliGenerateRequest buildRequestFromReport(KundaliReport report) {

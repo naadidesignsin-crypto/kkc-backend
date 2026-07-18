@@ -2,7 +2,11 @@ package com.kkc.kundali.mapper;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.kkc.kundali.dto.*;
+import com.kkc.kundali.dto.DashaPeriodResponse;
+import com.kkc.kundali.dto.KundaliDashaResponse;
+import com.kkc.kundali.dto.KundaliDoshaResponse;
+import com.kkc.kundali.dto.KundaliPlanetsResponse;
+import com.kkc.kundali.dto.PlanetPositionResponse;
 import com.kkc.kundali.entity.KundaliReportSection;
 import org.springframework.stereotype.Component;
 
@@ -19,9 +23,14 @@ public class KundaliSectionMapper {
             DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm", Locale.ENGLISH);
 
     private final ObjectMapper objectMapper;
+    private final KundaliEnglishNormalizer englishNormalizer;
 
-    public KundaliSectionMapper(ObjectMapper objectMapper) {
+    public KundaliSectionMapper(
+            ObjectMapper objectMapper,
+            KundaliEnglishNormalizer englishNormalizer
+    ) {
         this.objectMapper = objectMapper;
+        this.englishNormalizer = englishNormalizer;
     }
 
     public KundaliPlanetsResponse toPlanetsResponse(KundaliReportSection section) {
@@ -41,19 +50,19 @@ public class KundaliSectionMapper {
                 for (JsonNode planet : planetList) {
                     planets.add(
                             PlanetPositionResponse.builder()
-                                    .name(text(planet, "name"))
+                                    .name(english(planet, "name"))
                                     .degree(text(planet, "degree"))
                                     .latitude(doubleValue(planet, "latitude"))
                                     .longitude(doubleValue(planet, "longitude"))
-                                    .rashi(text(planet, "rashi"))
-                                    .rashiLord(text(planet, "rashiLord"))
-                                    .nakshatra(text(planet, "nakshatra"))
-                                    .nakshatraLord(text(planet, "nakshatraLord"))
+                                    .rashi(english(planet, "rashi"))
+                                    .rashiLord(english(planet, "rashiLord"))
+                                    .nakshatra(english(planet, "nakshatra"))
+                                    .nakshatraLord(english(planet, "nakshatraLord"))
                                     .charan(text(planet, "charan"))
                                     .house(intValue(planet, "house"))
                                     .retrograde(booleanValue(planet, "isRetrograde"))
                                     .combust(booleanValue(planet, "isCombust"))
-                                    .planetState(text(planet, "PlanetState"))
+                                    .planetState(english(planet, "PlanetState"))
                                     .build()
                     );
                 }
@@ -95,7 +104,7 @@ public class KundaliSectionMapper {
                     boolean active = isDateActive(startDate, endDate, now);
 
                     DashaPeriodResponse response = DashaPeriodResponse.builder()
-                            .planet(text(dasha, "planet"))
+                            .planet(english(dasha, "planet"))
                             .startDate(startDate)
                             .endDate(endDate)
                             .active(active)
@@ -132,14 +141,17 @@ public class KundaliSectionMapper {
                     .path(0)
                     .path("mangalDosha");
 
-            String type = text(mangalDosha, "type");
-            String intensity = text(mangalDosha, "intensity");
-            String reason = text(mangalDosha, "reason");
-            String info = text(mangalDosha, "info");
+            String rawType = text(mangalDosha, "type");
+            String rawIntensity = text(mangalDosha, "intensity");
+            String rawReason = text(mangalDosha, "reason");
+            String rawInfo = text(mangalDosha, "info");
 
-            boolean present =
-                    (type != null && !type.isBlank())
-                            || (reason != null && reason.contains("मांगलिक"));
+            String type = englishNormalizer.normalize(rawType);
+            String intensity = englishNormalizer.normalize(rawIntensity);
+            String reason = englishNormalizer.normalize(rawReason);
+            String info = englishNormalizer.normalize(rawInfo);
+
+            boolean present = isMangalDoshaPresent(rawType, rawReason, type, reason);
 
             return KundaliDoshaResponse.builder()
                     .reportId(section.getReportId())
@@ -157,7 +169,33 @@ public class KundaliSectionMapper {
         }
     }
 
+    private boolean isMangalDoshaPresent(
+            String rawType,
+            String rawReason,
+            String normalizedType,
+            String normalizedReason
+    ) {
+        if (hasText(rawType) || hasText(normalizedType)) {
+            return true;
+        }
+
+        String raw = rawReason == null ? "" : rawReason.toLowerCase(Locale.ENGLISH);
+        String normalized = normalizedReason == null
+                ? ""
+                : normalizedReason.toLowerCase(Locale.ENGLISH);
+
+        return raw.contains("मांगलिक")
+                || raw.contains("मंगल दोष")
+                || normalized.contains("mangal dosha is present")
+                || normalized.contains("mangal dosha present")
+                || normalized.contains("manglik");
+    }
+
     private String text(JsonNode node, String fieldName) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+
         JsonNode value = node.path(fieldName);
 
         if (value.isMissingNode() || value.isNull()) {
@@ -166,10 +204,18 @@ public class KundaliSectionMapper {
 
         String textValue = value.asText();
 
-        return textValue == null || textValue.isBlank() ? null : textValue;
+        return textValue == null || textValue.isBlank() ? null : textValue.trim();
+    }
+
+    private String english(JsonNode node, String fieldName) {
+        return englishNormalizer.normalize(text(node, fieldName));
     }
 
     private Double doubleValue(JsonNode node, String fieldName) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+
         JsonNode value = node.path(fieldName);
 
         if (value.isMissingNode() || value.isNull()) {
@@ -180,6 +226,10 @@ public class KundaliSectionMapper {
     }
 
     private Integer intValue(JsonNode node, String fieldName) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+
         JsonNode value = node.path(fieldName);
 
         if (value.isMissingNode() || value.isNull()) {
@@ -190,6 +240,10 @@ public class KundaliSectionMapper {
     }
 
     private Boolean booleanValue(JsonNode node, String fieldName) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+
         JsonNode value = node.path(fieldName);
 
         if (value.isMissingNode() || value.isNull()) {
@@ -213,5 +267,9 @@ public class KundaliSectionMapper {
         } catch (Exception ex) {
             return false;
         }
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 }
