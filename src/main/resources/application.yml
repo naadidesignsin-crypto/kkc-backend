@@ -30,3 +30,9 @@ kundli-api:
   base-url: ${KUNDLI_API_BASE_URL:https://kundliapi.com}
   api-key: ${KUNDLI_API_KEY:}
   astro-data-path: ${KUNDLI_ASTRO_DATA_PATH:/api/astro/get_astro_data}
+
+location:
+  search:
+    base-url: https://nominatim.openstreetmap.org
+    country-codes: in
+    user-agent: KKC-Astrology/1.0 contact:kalagavinay@gmail.com

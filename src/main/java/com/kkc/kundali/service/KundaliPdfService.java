@@ -7,9 +7,11 @@ import com.kkc.kundali.dto.KundaliDashaResponse;
 import com.kkc.kundali.dto.KundaliDoshaResponse;
 import com.kkc.kundali.dto.KundaliHouseResponse;
 import com.kkc.kundali.dto.KundaliNavamsaResponse;
+import com.kkc.kundali.dto.KundaliParasharaReportResponse;
 import com.kkc.kundali.dto.KundaliPlanetsResponse;
 import com.kkc.kundali.dto.KundaliSummaryResponse;
 import com.kkc.kundali.dto.NavamsaPlanetResponse;
+import com.kkc.kundali.dto.ParasharaSectionResponse;
 import com.kkc.kundali.dto.PlanetPositionResponse;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import org.springframework.stereotype.Service;
@@ -17,6 +19,7 @@ import org.springframework.stereotype.Service;
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 @Service
 public class KundaliPdfService {
@@ -25,28 +28,32 @@ public class KundaliPdfService {
     private final KundaliDisplayService kundaliDisplayService;
     private final KundaliHouseService kundaliHouseService;
     private final KundaliNavamsaService kundaliNavamsaService;
+    private final KundaliParasharaService kundaliParasharaService;
 
     public KundaliPdfService(
             KundaliGenerationService kundaliGenerationService,
             KundaliDisplayService kundaliDisplayService,
             KundaliHouseService kundaliHouseService,
-            KundaliNavamsaService kundaliNavamsaService
+            KundaliNavamsaService kundaliNavamsaService,
+            KundaliParasharaService kundaliParasharaService
     ) {
         this.kundaliGenerationService = kundaliGenerationService;
         this.kundaliDisplayService = kundaliDisplayService;
         this.kundaliHouseService = kundaliHouseService;
         this.kundaliNavamsaService = kundaliNavamsaService;
+        this.kundaliParasharaService = kundaliParasharaService;
     }
 
     public byte[] generateReportPdf(Long reportId) {
         KundaliSummaryResponse summary = kundaliGenerationService.findSummaryById(reportId);
         KundaliPlanetsResponse planets = kundaliDisplayService.getPlanets(reportId);
         KundaliNavamsaResponse navamsa = kundaliNavamsaService.getNavamsa(reportId);
+        KundaliParasharaReportResponse parashara = kundaliParasharaService.getParasharaReport(reportId);
         KundaliHouseResponse houses = kundaliHouseService.getHouseInterpretations(reportId);
         KundaliDashaResponse dasha = kundaliDisplayService.getDasha(reportId);
         KundaliDoshaResponse dosha = kundaliDisplayService.getDosha(reportId);
 
-        String html = buildHtml(summary, planets, navamsa, houses, dasha, dosha);
+        String html = buildHtml(summary, planets, navamsa, parashara, houses, dasha, dosha);
 
         try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             PdfRendererBuilder builder = new PdfRendererBuilder();
@@ -66,6 +73,7 @@ public class KundaliPdfService {
             KundaliSummaryResponse summary,
             KundaliPlanetsResponse planets,
             KundaliNavamsaResponse navamsa,
+            KundaliParasharaReportResponse parashara,
             KundaliHouseResponse houses,
             KundaliDashaResponse dasha,
             KundaliDoshaResponse dosha
@@ -217,6 +225,15 @@ public class KundaliPdfService {
                             font-size: 11px;
                         }
 
+                        ul {
+                            margin: 6px 0 0;
+                            padding-left: 18px;
+                        }
+
+                        li {
+                            margin-bottom: 4px;
+                        }
+
                         .dasha-item {
                             border: 1px solid #ead8ad;
                             border-radius: 8px;
@@ -235,6 +252,7 @@ public class KundaliPdfService {
                             border-radius: 10px;
                             padding: 12px;
                             background: #fffaf0;
+                            margin-bottom: 10px;
                         }
 
                         .house-card {
@@ -305,6 +323,8 @@ public class KundaliPdfService {
 
                     {{NAVAMSA_SECTION}}
 
+                    {{PARASHARA_SECTION}}
+
                     {{HOUSE_SECTION}}
 
                     {{DASHA_SECTION}}
@@ -330,6 +350,7 @@ public class KundaliPdfService {
                 .replace("{{SUMMARY_SECTION}}", buildSummarySection(summary))
                 .replace("{{PLANETS_SECTION}}", buildPlanetsSection(planets))
                 .replace("{{NAVAMSA_SECTION}}", buildNavamsaSection(navamsa))
+                .replace("{{PARASHARA_SECTION}}", buildParasharaSection(parashara))
                 .replace("{{HOUSE_SECTION}}", buildHouseSection(houses))
                 .replace("{{DASHA_SECTION}}", buildDashaSection(dasha))
                 .replace("{{DOSHA_SECTION}}", buildDoshaSection(dosha));
@@ -515,6 +536,97 @@ public class KundaliPdfService {
         );
     }
 
+    private String buildParasharaSection(KundaliParasharaReportResponse parashara) {
+        if (parashara == null
+                || parashara.getSections() == null
+                || parashara.getSections().isEmpty()) {
+            return """
+                    <div class="section page-break">
+                        <h2>Parashara Life-Area Interpretation</h2>
+                        <p>Parashara interpretation is not available for this report.</p>
+                    </div>
+                    """;
+        }
+
+        StringBuilder sectionCards = new StringBuilder();
+
+        for (ParasharaSectionResponse section : parashara.getSections()) {
+            sectionCards.append("""
+                    <div class="house-card">
+                        <div class="house-title">%s</div>
+
+                        <div class="house-meta">
+                            <strong>Section:</strong> %s
+                        </div>
+
+                        <div class="house-text">
+                            <strong>Summary:</strong><br/>
+                            %s
+                        </div>
+
+                        <div class="house-text">
+                            <strong>Focus Areas:</strong><br/>
+                            %s
+                        </div>
+
+                        <div class="house-text">
+                            <strong>Observations:</strong><br/>
+                            %s
+                        </div>
+
+                        <div class="house-text">
+                            <strong>Guidance:</strong><br/>
+                            %s
+                        </div>
+
+                        <div class="house-text">
+                            <strong>Caution:</strong><br/>
+                            %s
+                        </div>
+                    </div>
+                    """.formatted(
+                    esc(section.getTitle()),
+                    esc(section.getSectionKey()),
+                    esc(section.getSummary()),
+                    buildBulletText(section.getFocusAreas()),
+                    buildBulletText(section.getObservations()),
+                    esc(section.getGuidance()),
+                    esc(section.getCaution())
+            ));
+        }
+
+        return """
+                <div class="section page-break">
+                    <h2>Parashara Life-Area Interpretation</h2>
+
+                    <p class="section-note">
+                        This section gives structured life-area interpretation using Lagna,
+                        Rashi, Nakshatra, planetary positions, houses, Dasha, Dosha, and Navamsa.
+                        Final judgement should be reviewed by an astrologer.
+                    </p>
+
+                    <div class="grid">
+                        <div class="row">
+                            %s
+                            %s
+                        </div>
+                        <div class="row">
+                            %s
+                            %s
+                        </div>
+                    </div>
+
+                    %s
+                </div>
+                """.formatted(
+                box("Lagna", parashara.getLagna()),
+                box("Rashi", parashara.getRashi()),
+                box("Nakshatra", parashara.getNakshatra()),
+                box("Current Dasha", parashara.getCurrentDasha()),
+                sectionCards
+        );
+    }
+
     private String buildHouseSection(KundaliHouseResponse houses) {
         if (houses == null || houses.getHouses() == null || houses.getHouses().isEmpty()) {
             return """
@@ -603,7 +715,7 @@ public class KundaliPdfService {
     private String buildDashaSection(KundaliDashaResponse dasha) {
         if (dasha == null || dasha.getDashaPeriods() == null || dasha.getDashaPeriods().isEmpty()) {
             return """
-                    <div class="section">
+                    <div class="section page-break">
                         <h2>Vimshottari Mahadasha</h2>
                         <p>Dasha details are not available for this report.</p>
                     </div>
@@ -637,7 +749,7 @@ public class KundaliPdfService {
                 + esc(dasha.getCurrentDasha().getEndDate());
 
         return """
-                <div class="section">
+                <div class="section page-break">
                     <h2>Vimshottari Mahadasha</h2>
                     <div class="dosha-card">
                         <span class="label">Current Dasha</span>
@@ -652,7 +764,7 @@ public class KundaliPdfService {
     private String buildDoshaSection(KundaliDoshaResponse dosha) {
         if (dosha == null) {
             return """
-                    <div class="section">
+                    <div class="section page-break">
                         <h2>Mangal Dosha Analysis</h2>
                         <p>Mangal Dosha details are not available for this report.</p>
                     </div>
@@ -664,7 +776,7 @@ public class KundaliPdfService {
                 : "Not Present";
 
         return """
-                <div class="section">
+                <div class="section page-break">
                     <h2>Mangal Dosha Analysis</h2>
 
                     <div class="grid">
@@ -694,6 +806,24 @@ public class KundaliPdfService {
                 esc(dosha.getReason()),
                 esc(dosha.getInfo())
         );
+    }
+
+    private String buildBulletText(List<String> items) {
+        if (items == null || items.isEmpty()) {
+            return "-";
+        }
+
+        StringBuilder builder = new StringBuilder("<ul>");
+
+        for (String item : items) {
+            builder.append("<li>")
+                    .append(esc(item))
+                    .append("</li>");
+        }
+
+        builder.append("</ul>");
+
+        return builder.toString();
     }
 
     private String box(String label, Object value) {
