@@ -6,8 +6,10 @@ import com.kkc.kundali.dto.HousePlanetResponse;
 import com.kkc.kundali.dto.KundaliDashaResponse;
 import com.kkc.kundali.dto.KundaliDoshaResponse;
 import com.kkc.kundali.dto.KundaliHouseResponse;
+import com.kkc.kundali.dto.KundaliNavamsaResponse;
 import com.kkc.kundali.dto.KundaliPlanetsResponse;
 import com.kkc.kundali.dto.KundaliSummaryResponse;
+import com.kkc.kundali.dto.NavamsaPlanetResponse;
 import com.kkc.kundali.dto.PlanetPositionResponse;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import org.springframework.stereotype.Service;
@@ -22,25 +24,29 @@ public class KundaliPdfService {
     private final KundaliGenerationService kundaliGenerationService;
     private final KundaliDisplayService kundaliDisplayService;
     private final KundaliHouseService kundaliHouseService;
+    private final KundaliNavamsaService kundaliNavamsaService;
 
     public KundaliPdfService(
             KundaliGenerationService kundaliGenerationService,
             KundaliDisplayService kundaliDisplayService,
-            KundaliHouseService kundaliHouseService
+            KundaliHouseService kundaliHouseService,
+            KundaliNavamsaService kundaliNavamsaService
     ) {
         this.kundaliGenerationService = kundaliGenerationService;
         this.kundaliDisplayService = kundaliDisplayService;
         this.kundaliHouseService = kundaliHouseService;
+        this.kundaliNavamsaService = kundaliNavamsaService;
     }
 
     public byte[] generateReportPdf(Long reportId) {
         KundaliSummaryResponse summary = kundaliGenerationService.findSummaryById(reportId);
         KundaliPlanetsResponse planets = kundaliDisplayService.getPlanets(reportId);
+        KundaliNavamsaResponse navamsa = kundaliNavamsaService.getNavamsa(reportId);
+        KundaliHouseResponse houses = kundaliHouseService.getHouseInterpretations(reportId);
         KundaliDashaResponse dasha = kundaliDisplayService.getDasha(reportId);
         KundaliDoshaResponse dosha = kundaliDisplayService.getDosha(reportId);
-        KundaliHouseResponse houses = kundaliHouseService.getHouseInterpretations(reportId);
 
-        String html = buildHtml(summary, planets, dasha, dosha, houses);
+        String html = buildHtml(summary, planets, navamsa, houses, dasha, dosha);
 
         try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             PdfRendererBuilder builder = new PdfRendererBuilder();
@@ -59,9 +65,10 @@ public class KundaliPdfService {
     private String buildHtml(
             KundaliSummaryResponse summary,
             KundaliPlanetsResponse planets,
+            KundaliNavamsaResponse navamsa,
+            KundaliHouseResponse houses,
             KundaliDashaResponse dasha,
-            KundaliDoshaResponse dosha,
-            KundaliHouseResponse houses
+            KundaliDoshaResponse dosha
     ) {
         String generatedAt = LocalDateTime.now()
                 .format(DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a"));
@@ -139,6 +146,12 @@ public class KundaliPdfService {
                             border-bottom: 1px solid #e1c68a;
                             color: #8a5a16;
                             font-size: 17px;
+                        }
+
+                        .section-note {
+                            margin: 0 0 10px;
+                            color: #655540;
+                            font-size: 11px;
                         }
 
                         .grid {
@@ -290,6 +303,8 @@ public class KundaliPdfService {
 
                     {{PLANETS_SECTION}}
 
+                    {{NAVAMSA_SECTION}}
+
                     {{HOUSE_SECTION}}
 
                     {{DASHA_SECTION}}
@@ -314,6 +329,7 @@ public class KundaliPdfService {
                 .replace("{{GENERATED_AT}}", esc(generatedAt))
                 .replace("{{SUMMARY_SECTION}}", buildSummarySection(summary))
                 .replace("{{PLANETS_SECTION}}", buildPlanetsSection(planets))
+                .replace("{{NAVAMSA_SECTION}}", buildNavamsaSection(navamsa))
                 .replace("{{HOUSE_SECTION}}", buildHouseSection(houses))
                 .replace("{{DASHA_SECTION}}", buildDashaSection(dasha))
                 .replace("{{DOSHA_SECTION}}", buildDoshaSection(dosha));
@@ -428,6 +444,77 @@ public class KundaliPdfService {
                 """.formatted(rows);
     }
 
+    private String buildNavamsaSection(KundaliNavamsaResponse navamsa) {
+        if (navamsa == null || navamsa.getPlanets() == null || navamsa.getPlanets().isEmpty()) {
+            return """
+                    <div class="section page-break">
+                        <h2>Navamsa / D9 Chart</h2>
+                        <p>Navamsa details are not available for this report.</p>
+                    </div>
+                    """;
+        }
+
+        StringBuilder rows = new StringBuilder();
+
+        for (NavamsaPlanetResponse planet : navamsa.getPlanets()) {
+            rows.append("""
+                    <tr>
+                        <td>%s</td>
+                        <td>%s</td>
+                        <td>%s</td>
+                        <td>%s</td>
+                        <td>%s</td>
+                        <td>%s</td>
+                        <td>%s</td>
+                    </tr>
+                    """.formatted(
+                    esc(planet.getPlanetName()),
+                    esc(planet.getBirthRashi()),
+                    safe(planet.getBirthHouse()),
+                    esc(planet.getBirthNakshatra()),
+                    safe(planet.getNavamsaNumber()),
+                    esc(planet.getNavamsaRashi()),
+                    safe(planet.getNavamsaHouse())
+            ));
+        }
+
+        return """
+                <div class="section page-break">
+                    <h2>Navamsa / D9 Chart</h2>
+
+                    <div class="dosha-card">
+                        <span class="label">Navamsa Ascendant</span>
+                        <span class="value">%s</span>
+                    </div>
+
+                    <p class="section-note">
+                        Navamsa is used in Parashara astrology to understand marriage,
+                        dharma, inner planetary strength, and deeper life patterns.
+                    </p>
+
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Planet</th>
+                                <th>Birth Rashi</th>
+                                <th>Birth House</th>
+                                <th>Birth Nakshatra</th>
+                                <th>Navamsa No.</th>
+                                <th>Navamsa Rashi</th>
+                                <th>Navamsa House</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            %s
+                        </tbody>
+                    </table>
+                </div>
+                """.formatted(
+                esc(navamsa.getNavamsaAscendant()),
+                rows
+        );
+    }
+
     private String buildHouseSection(KundaliHouseResponse houses) {
         if (houses == null || houses.getHouses() == null || houses.getHouses().isEmpty()) {
             return """
@@ -476,7 +563,7 @@ public class KundaliPdfService {
         return """
                 <div class="section page-break">
                     <h2>House-wise Parashara Interpretation</h2>
-                    <p>
+                    <p class="section-note">
                         Each house represents a specific life area. This section is generated from
                         house-wise planetary placements and should be read along with house lord,
                         aspects, planetary strength, Nakshatra, and current Dasha.
