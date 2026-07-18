@@ -1,7 +1,7 @@
 package com.kkc.kundali.service;
 
 
-import com.kkc.kundali.dto.KundaliEnquiry;
+import com.kkc.kundali.entity.KundaliEnquiry;
 import com.kkc.kundali.dto.KundaliEnquiryRequest;
 import com.kkc.kundali.dto.KundaliEnquiryResponse;
 import com.kkc.kundali.dto.KundaliStatusUpdateRequest;

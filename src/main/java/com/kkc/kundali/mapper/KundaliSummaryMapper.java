@@ -2,8 +2,8 @@ package com.kkc.kundali.mapper;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.kkc.kundali.dto.KundaliReport;
 import com.kkc.kundali.dto.KundaliSummaryResponse;
+import com.kkc.kundali.entity.KundaliReport;
 import com.kkc.kundali.util.KundaliReportStatus;
 import org.springframework.stereotype.Component;
 
@@ -11,9 +11,14 @@ import org.springframework.stereotype.Component;
 public class KundaliSummaryMapper {
 
     private final ObjectMapper objectMapper;
+    private final KundaliEnglishNormalizer englishNormalizer;
 
-    public KundaliSummaryMapper(ObjectMapper objectMapper) {
+    public KundaliSummaryMapper(
+            ObjectMapper objectMapper,
+            KundaliEnglishNormalizer englishNormalizer
+    ) {
         this.objectMapper = objectMapper;
+        this.englishNormalizer = englishNormalizer;
     }
 
     public KundaliSummaryResponse from(KundaliReport report) {
@@ -21,7 +26,7 @@ public class KundaliSummaryMapper {
                 KundaliSummaryResponse.builder()
                         .id(report.getId())
                         .fullName(report.getFullName())
-                        .gender(report.getGender())
+                        .gender(englishNormalizer.normalize(report.getGender()))
                         .dateOfBirth(report.getDateOfBirth())
                         .timeOfBirth(report.getTimeOfBirth())
                         .birthPlace(report.getBirthPlace())
@@ -52,34 +57,34 @@ public class KundaliSummaryMapper {
             }
 
             return builder
-                    .ascendant(text(astroData, "ascendant"))
-                    .rashi(text(astroData, "sign"))
-                    .signLord(text(astroData, "signLord"))
+                    .ascendant(english(astroData, "ascendant"))
+                    .rashi(english(astroData, "sign"))
+                    .signLord(english(astroData, "signLord"))
 
                     // Provider has typo: "naksahtra".
                     // Keep fallback for future corrected spelling also.
-                    .nakshatra(text(astroData, "nakshatra", "naksahtra"))
-                    .nakshatraLord(text(astroData, "nakshatraLord"))
+                    .nakshatra(english(astroData, "nakshatra", "naksahtra"))
+                    .nakshatraLord(english(astroData, "nakshatraLord"))
                     .charan(text(astroData, "charan"))
 
-                    .varna(text(astroData, "varna"))
-                    .vashya(text(astroData, "vashya"))
-                    .yoni(text(astroData, "yoni"))
-                    .gana(text(astroData, "gana"))
-                    .nadi(text(astroData, "nadi"))
+                    .varna(english(astroData, "varna"))
+                    .vashya(english(astroData, "vashya"))
+                    .yoni(english(astroData, "yoni"))
+                    .gana(english(astroData, "gana"))
+                    .nadi(english(astroData, "nadi"))
 
-                    .tithi(text(astroData.path("tithi"), "name"))
-                    .yoga(text(astroData.path("yog"), "name"))
-                    .karan(text(astroData.path("karan"), "name"))
-                    .masa(text(astroData, "masa"))
+                    .tithi(english(astroData.path("tithi"), "name"))
+                    .yoga(english(astroData.path("yog"), "name"))
+                    .karan(english(astroData.path("karan"), "name"))
+                    .masa(english(astroData, "masa"))
 
                     .sunrise(text(astroData, "sunrise"))
                     .sunset(text(astroData, "sunset"))
 
-                    .tatva(text(astroData, "tatva"))
-                    .nameAlphabetHindi(text(astroData, "nameAlphabetHindi"))
+                    .tatva(english(astroData, "tatva"))
+                    .nameAlphabetHindi(english(astroData, "nameAlphabetHindi"))
                     .nameAlphabetEnglish(text(astroData, "nameAlphabetEnglish"))
-                    .paya(text(astroData, "paya"))
+                    .paya(english(astroData, "paya"))
                     .build();
 
         } catch (Exception ex) {
@@ -102,11 +107,15 @@ public class KundaliSummaryMapper {
                 String textValue = value.asText();
 
                 if (textValue != null && !textValue.isBlank()) {
-                    return textValue;
+                    return textValue.trim();
                 }
             }
         }
 
         return null;
+    }
+
+    private String english(JsonNode node, String... fieldNames) {
+        return englishNormalizer.normalize(text(node, fieldNames));
     }
 }

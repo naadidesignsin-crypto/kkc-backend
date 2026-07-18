@@ -1,5 +1,6 @@
 package com.kkc.kundali.dto;
 
+import com.kkc.kundali.entity.KundaliEnquiry;
 import com.kkc.kundali.util.ConsultationType;
 import com.kkc.kundali.util.KundaliEnquiryStatus;
 import lombok.*;

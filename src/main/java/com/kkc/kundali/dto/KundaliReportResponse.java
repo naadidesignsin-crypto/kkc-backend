@@ -1,5 +1,6 @@
 package com.kkc.kundali.dto;
 
+import com.kkc.kundali.entity.KundaliReport;
 import com.kkc.kundali.util.KundaliReportStatus;
 import lombok.*;
 

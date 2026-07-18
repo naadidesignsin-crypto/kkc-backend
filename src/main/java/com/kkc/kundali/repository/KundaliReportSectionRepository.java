@@ -1,6 +1,6 @@
 package com.kkc.kundali.repository;
 
-import com.kkc.kundali.dto.KundaliReportSection;
+import com.kkc.kundali.entity.KundaliReportSection;
 import com.kkc.kundali.util.KundaliReportSectionType;
 import org.springframework.data.jpa.repository.JpaRepository;
 

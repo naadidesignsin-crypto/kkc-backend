@@ -1,6 +1,8 @@
 package com.kkc.kundali.service;
 
 import com.kkc.kundali.dto.*;
+import com.kkc.kundali.dto.KundaliGenerateRequest;
+import com.kkc.kundali.entity.KundaliReport;
 import com.kkc.kundali.mapper.KundaliSummaryMapper;
 import com.kkc.kundali.repository.KundaliReportRepository;
 import com.kkc.kundali.util.KundaliReportStatus;

@@ -1,4 +1,4 @@
-package com.kkc.kundali.dto;
+package com.kkc.kundali.entity;
 
 
 import com.kkc.kundali.util.ConsultationType;

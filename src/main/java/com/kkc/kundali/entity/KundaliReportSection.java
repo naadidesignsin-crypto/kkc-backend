@@ -1,14 +1,13 @@
-package com.kkc.kundali.dto;
+package com.kkc.kundali.entity;
 
+import com.kkc.kundali.util.KundaliReportSectionType;
 import com.kkc.kundali.util.KundaliReportStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 
 @Getter
 @Setter
@@ -16,54 +15,45 @@ import java.time.LocalTime;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "kundali_reports")
-public class KundaliReport {
+@Table(
+        name = "kundali_report_sections",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_kundali_report_section",
+                        columnNames = {"report_id", "section_type"}
+                )
+        }
+)
+public class KundaliReportSection {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "full_name", nullable = false, length = 120)
-    private String fullName;
+    @Column(name = "report_id", nullable = false)
+    private Long reportId;
 
-    @Column(length = 20)
-    private String gender;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "section_type", nullable = false, length = 60)
+    private KundaliReportSectionType sectionType;
 
-    @Column(name = "date_of_birth", nullable = false)
-    private LocalDate dateOfBirth;
-
-    @Column(name = "time_of_birth", nullable = false)
-    private LocalTime timeOfBirth;
-
-    @Column(name = "birth_place", nullable = false, length = 200)
-    private String birthPlace;
-
-    @Column(nullable = false)
-    private Double latitude;
-
-    @Column(nullable = false)
-    private Double longitude;
-
-    @Column(nullable = false, length = 80)
-    private String timezone;
-
-    @Column(length = 20)
-    private String language;
-
-    @Column(length = 80)
+    @Column(nullable = false, length = 60)
     private String provider;
+
+    @Column(name = "provider_endpoint", length = 255)
+    private String providerEndpoint;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private KundaliReportStatus status;
 
     @JdbcTypeCode(SqlTypes.LONGVARCHAR)
-    @Column(name = "provider_request_json")
-    private String providerRequestJson;
+    @Column(name = "request_json")
+    private String requestJson;
 
     @JdbcTypeCode(SqlTypes.LONGVARCHAR)
-    @Column(name = "provider_response_json")
-    private String providerResponseJson;
+    @Column(name = "response_json")
+    private String responseJson;
 
     @JdbcTypeCode(SqlTypes.LONGVARCHAR)
     @Column(name = "error_message")

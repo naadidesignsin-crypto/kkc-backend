@@ -81,6 +81,10 @@ public class KundliProviderClient {
         body.put("lon", request.getLongitude());
         body.put("tzone", calculateTimezoneOffset(request));
 
+        // Client expects KundliAPI response in English.
+        // Do not send Telugu/Hindi to provider.
+        body.put("lang", "en");
+
         return body;
     }
 
