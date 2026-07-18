@@ -15,7 +15,8 @@ public class CorsConfig {
                 registry.addMapping("/api/**")
                         .allowedOrigins(
                                 "http://localhost:5173",
-                                "http://localhost:5174"
+                                "http://localhost:5174",
+                                "https://kkc-astrology-frontend-15wdk4sb5.vercel.app/"
                         )
                         .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                         .allowedHeaders("*");
