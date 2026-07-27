@@ -11,12 +11,16 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: ${DDL_AUTO:update}
     show-sql: true
     open-in-view: false
     properties:
       hibernate:
         format_sql: true
+
+dev-reset:
+  enabled: ${DEV_RESET_ENABLED:false}
+  secret: ${DEV_RESET_SECRET:}
 
 logging:
   level:

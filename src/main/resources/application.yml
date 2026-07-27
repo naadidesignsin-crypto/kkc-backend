@@ -12,11 +12,15 @@ spring:
     password: ${DB_PASSWORD:postgres}
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: ${DDL_AUTO:update}
     open-in-view: false
     properties:
       hibernate:
         format_sql: true
+
+dev-reset:
+  enabled: ${DEV_RESET_ENABLED:false}
+  secret: ${DEV_RESET_SECRET:}
 
 app:
   frontend-origin: ${FRONTEND_ORIGIN:http://localhost:5173}

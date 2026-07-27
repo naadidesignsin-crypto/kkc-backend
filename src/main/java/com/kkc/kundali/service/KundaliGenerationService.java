@@ -1,6 +1,8 @@
 package com.kkc.kundali.service;
 
 import com.kkc.kundali.dto.KundaliGenerateRequest;
+import com.kkc.kundali.dto.KundaliReportListItemResponse;
+import com.kkc.kundali.dto.KundaliReportPageResponse;
 import com.kkc.kundali.dto.KundaliReportResponse;
 import com.kkc.kundali.dto.KundaliSummaryResponse;
 import com.kkc.kundali.dto.ProviderResult;
@@ -9,7 +11,11 @@ import com.kkc.kundali.mapper.KundaliSummaryMapper;
 import com.kkc.kundali.repository.KundaliReportRepository;
 import com.kkc.kundali.util.KundaliReportStatus;
 import com.kkc.kundali.util.KundliProviderClient;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -30,11 +36,13 @@ public class KundaliGenerationService {
         this.summaryMapper = summaryMapper;
     }
 
+    @Transactional
     public KundaliReportResponse generate(KundaliGenerateRequest request) {
         KundaliReport existingReport = findExistingSuccessfulReport(request);
 
         if (existingReport != null) {
-            return KundaliReportResponse.from(existingReport);
+            syncSummarySnapshot(existingReport);
+            return KundaliReportResponse.from(repository.save(existingReport));
         }
 
         KundaliReport report = KundaliReport.builder()
@@ -61,8 +69,9 @@ public class KundaliGenerationService {
             report.setStatus(KundaliReportStatus.SUCCESS);
             report.setErrorMessage(null);
 
-            return KundaliReportResponse.from(repository.save(report));
+            syncSummarySnapshot(report);
 
+            return KundaliReportResponse.from(repository.save(report));
         } catch (Exception ex) {
             report.setStatus(KundaliReportStatus.FAILED);
             report.setErrorMessage(ex.getMessage());
@@ -71,6 +80,7 @@ public class KundaliGenerationService {
         }
     }
 
+    @Transactional(readOnly = true)
     public KundaliReportResponse findById(Long id) {
         KundaliReport report = repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Kundali report not found"));
@@ -78,6 +88,7 @@ public class KundaliGenerationService {
         return KundaliReportResponse.from(report);
     }
 
+    @Transactional(readOnly = true)
     public List<KundaliReportResponse> findAll(KundaliReportStatus status) {
         List<KundaliReport> reports = status == null
                 ? repository.findAllByOrderByCreatedAtDesc()
@@ -88,11 +99,75 @@ public class KundaliGenerationService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public KundaliReportPageResponse findGeneratedReports(
+            KundaliReportStatus status,
+            int page,
+            int size
+    ) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 50);
+
+        Pageable pageable = PageRequest.of(safePage, safeSize);
+
+        Page<KundaliReport> reportPage = status == null
+                ? repository.findAllByOrderByCreatedAtDesc(pageable)
+                : repository.findByStatusOrderByCreatedAtDesc(status, pageable);
+
+        return new KundaliReportPageResponse(
+                reportPage.getContent()
+                        .stream()
+                        .map(this::toListItem)
+                        .toList(),
+                reportPage.getNumber(),
+                reportPage.getSize(),
+                reportPage.getTotalElements(),
+                reportPage.getTotalPages()
+        );
+    }
+
+    @Transactional(readOnly = true)
     public KundaliSummaryResponse findSummaryById(Long id) {
         KundaliReport report = repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Kundali report not found"));
 
         return summaryMapper.from(report);
+    }
+
+    private KundaliReportListItemResponse toListItem(KundaliReport report) {
+        return new KundaliReportListItemResponse(
+                report.getId(),
+                report.getFullName(),
+                report.getGender(),
+                report.getDateOfBirth(),
+                report.getTimeOfBirth(),
+                report.getBirthPlace(),
+                report.getProvider(),
+                report.getStatus() != null ? report.getStatus().name() : null,
+                report.getAscendant(),
+                report.getRashi(),
+                report.getSignLord(),
+                report.getNakshatra(),
+                report.getNakshatraLord(),
+                report.getCurrentDasha(),
+                report.getCreatedAt()
+        );
+    }
+
+    private void syncSummarySnapshot(KundaliReport report) {
+        if (report == null
+                || report.getProviderResponseJson() == null
+                || report.getProviderResponseJson().isBlank()) {
+            return;
+        }
+
+        KundaliSummaryResponse summary = summaryMapper.from(report);
+
+        report.setAscendant(summary.getAscendant());
+        report.setRashi(summary.getRashi());
+        report.setSignLord(summary.getSignLord());
+        report.setNakshatra(summary.getNakshatra());
+        report.setNakshatraLord(summary.getNakshatraLord());
     }
 
     private KundaliReport findExistingSuccessfulReport(KundaliGenerateRequest request) {

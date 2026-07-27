@@ -26,6 +26,14 @@ public class KundaliReportResponse {
     private String timezone;
     private String language;
     private String provider;
+
+    private String ascendant;
+    private String rashi;
+    private String signLord;
+    private String nakshatra;
+    private String nakshatraLord;
+    private String currentDasha;
+
     private KundaliReportStatus status;
     private String providerResponseJson;
     private String errorMessage;
@@ -45,6 +53,12 @@ public class KundaliReportResponse {
                 .timezone(report.getTimezone())
                 .language(report.getLanguage())
                 .provider(report.getProvider())
+                .ascendant(report.getAscendant())
+                .rashi(report.getRashi())
+                .signLord(report.getSignLord())
+                .nakshatra(report.getNakshatra())
+                .nakshatraLord(report.getNakshatraLord())
+                .currentDasha(report.getCurrentDasha())
                 .status(report.getStatus())
                 .providerResponseJson(report.getProviderResponseJson())
                 .errorMessage(report.getErrorMessage())

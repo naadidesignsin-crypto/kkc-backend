@@ -53,6 +53,24 @@ public class KundaliReport {
     @Column(length = 80)
     private String provider;
 
+    @Column(name = "ascendant", length = 80)
+    private String ascendant;
+
+    @Column(name = "rashi", length = 80)
+    private String rashi;
+
+    @Column(name = "sign_lord", length = 80)
+    private String signLord;
+
+    @Column(name = "nakshatra", length = 80)
+    private String nakshatra;
+
+    @Column(name = "nakshatra_lord", length = 80)
+    private String nakshatraLord;
+
+    @Column(name = "current_dasha", length = 80)
+    private String currentDasha;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private KundaliReportStatus status;

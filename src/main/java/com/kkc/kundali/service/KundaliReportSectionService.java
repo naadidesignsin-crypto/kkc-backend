@@ -1,10 +1,13 @@
 package com.kkc.kundali.service;
 
+import com.kkc.kundali.dto.DashaPeriodResponse;
+import com.kkc.kundali.dto.KundaliDashaResponse;
 import com.kkc.kundali.dto.KundaliGenerateRequest;
 import com.kkc.kundali.dto.KundaliReportSectionResponse;
 import com.kkc.kundali.dto.ProviderResult;
 import com.kkc.kundali.entity.KundaliReport;
 import com.kkc.kundali.entity.KundaliReportSection;
+import com.kkc.kundali.mapper.KundaliSectionMapper;
 import com.kkc.kundali.repository.KundaliReportRepository;
 import com.kkc.kundali.repository.KundaliReportSectionRepository;
 import com.kkc.kundali.util.KundaliReportSectionType;
@@ -22,15 +25,18 @@ public class KundaliReportSectionService {
     private final KundaliReportRepository reportRepository;
     private final KundaliReportSectionRepository sectionRepository;
     private final KundliProviderClient providerClient;
+    private final KundaliSectionMapper sectionMapper;
 
     public KundaliReportSectionService(
             KundaliReportRepository reportRepository,
             KundaliReportSectionRepository sectionRepository,
-            KundliProviderClient providerClient
+            KundliProviderClient providerClient,
+            KundaliSectionMapper sectionMapper
     ) {
         this.reportRepository = reportRepository;
         this.sectionRepository = sectionRepository;
         this.providerClient = providerClient;
+        this.sectionMapper = sectionMapper;
     }
 
     @Transactional
@@ -54,6 +60,7 @@ public class KundaliReportSectionService {
             KundaliReportSection existingSection = existingSectionOptional.get();
 
             if (isAlreadyGenerated(existingSection)) {
+                syncReportSnapshotFromSection(report, existingSection);
                 return KundaliReportSectionResponse.from(existingSection);
             }
         }
@@ -87,8 +94,10 @@ public class KundaliReportSectionService {
             section.setStatus(KundaliReportStatus.SUCCESS);
             section.setErrorMessage(null);
 
-            return KundaliReportSectionResponse.from(sectionRepository.save(section));
+            KundaliReportSection savedSection = sectionRepository.save(section);
+            syncReportSnapshotFromSection(report, savedSection);
 
+            return KundaliReportSectionResponse.from(savedSection);
         } catch (Exception ex) {
             section.setStatus(KundaliReportStatus.FAILED);
             section.setErrorMessage(ex.getMessage());
@@ -107,6 +116,33 @@ public class KundaliReportSectionService {
                 .stream()
                 .map(KundaliReportSectionResponse::from)
                 .toList();
+    }
+
+    private void syncReportSnapshotFromSection(
+            KundaliReport report,
+            KundaliReportSection section
+    ) {
+        if (report == null
+                || section == null
+                || section.getStatus() != KundaliReportStatus.SUCCESS
+                || section.getResponseJson() == null
+                || section.getResponseJson().isBlank()) {
+            return;
+        }
+
+        if (section.getSectionType() == KundaliReportSectionType.DASHA) {
+            try {
+                KundaliDashaResponse dashaResponse = sectionMapper.toDashaResponse(section);
+                DashaPeriodResponse currentDasha = dashaResponse.getCurrentDasha();
+
+                if (currentDasha != null && currentDasha.getPlanet() != null) {
+                    report.setCurrentDasha(currentDasha.getPlanet());
+                    reportRepository.save(report);
+                }
+            } catch (Exception ignored) {
+                // Do not fail section generation just because snapshot update failed.
+            }
+        }
     }
 
     private boolean isAlreadyGenerated(KundaliReportSection section) {
