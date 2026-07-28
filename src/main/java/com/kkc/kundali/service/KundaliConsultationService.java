@@ -204,7 +204,7 @@ public class KundaliConsultationService {
 
     private String normalizePhoneNumber(String phoneNumber) {
         if (phoneNumber == null || phoneNumber.isBlank()) {
-            return "919700051668";
+            return "917981041123";
         }
 
         return phoneNumber.replaceAll("[^0-9]", "");
