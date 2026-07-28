@@ -10,8 +10,10 @@ import com.kkc.kundali.repository.KundaliReportRepository;
 import com.kkc.kundali.util.KundaliOrderIdGenerator;
 import com.kkc.kundali.util.KundaliReportStatus;
 import com.kkc.kundali.util.KundliProviderClient;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class KundaliGenerationService {
@@ -20,17 +22,20 @@ public class KundaliGenerationService {
     private final KundliProviderClient providerClient;
     private final KundaliSummaryMapper summaryMapper;
     private final KundaliOrderIdGenerator orderIdGenerator;
+    private final KundaliPublicReportAccessService publicReportAccessService;
 
     public KundaliGenerationService(
             KundaliReportRepository repository,
             KundliProviderClient providerClient,
             KundaliSummaryMapper summaryMapper,
-            KundaliOrderIdGenerator orderIdGenerator
+            KundaliOrderIdGenerator orderIdGenerator,
+            KundaliPublicReportAccessService publicReportAccessService
     ) {
         this.repository = repository;
         this.providerClient = providerClient;
         this.summaryMapper = summaryMapper;
         this.orderIdGenerator = orderIdGenerator;
+        this.publicReportAccessService = publicReportAccessService;
     }
 
     @Transactional
@@ -82,37 +87,23 @@ public class KundaliGenerationService {
     }
 
     @Transactional(readOnly = true)
-    public KundaliReportResponse findById(Long id) {
-        return KundaliReportResponse.from(findEntityById(id));
+    public KundaliReportResponse findByIdAndOrderId(Long id, String orderId) {
+        return KundaliReportResponse.from(publicReportAccessService.requireReportForOrder(id, orderId));
     }
 
     @Transactional(readOnly = true)
     public KundaliReportResponse findByOrderId(String orderId) {
-        return KundaliReportResponse.from(findEntityByOrderId(orderId));
+        return KundaliReportResponse.from(publicReportAccessService.requireReportByOrderId(orderId));
     }
 
     @Transactional(readOnly = true)
-    public KundaliSummaryResponse findSummaryById(Long id) {
-        return summaryMapper.from(findEntityById(id));
+    public KundaliSummaryResponse findSummaryByIdAndOrderId(Long id, String orderId) {
+        return summaryMapper.from(publicReportAccessService.requireReportForOrder(id, orderId));
     }
 
     @Transactional(readOnly = true)
     public KundaliSummaryResponse findSummaryByOrderId(String orderId) {
-        return summaryMapper.from(findEntityByOrderId(orderId));
-    }
-
-    private KundaliReport findEntityById(Long id) {
-        return repository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Kundali report not found"));
-    }
-
-    private KundaliReport findEntityByOrderId(String orderId) {
-        if (orderId == null || orderId.isBlank()) {
-            throw new IllegalArgumentException("Order ID is required");
-        }
-
-        return repository.findByOrderId(orderId.trim().toUpperCase())
-                .orElseThrow(() -> new IllegalArgumentException("Kundali report not found for Order ID: " + orderId));
+        return summaryMapper.from(publicReportAccessService.requireReportByOrderId(orderId));
     }
 
     private void syncSummarySnapshot(KundaliReport report) {
@@ -123,7 +114,6 @@ public class KundaliGenerationService {
         }
 
         KundaliSummaryResponse summary = summaryMapper.from(report);
-
         report.setAscendant(summary.getAscendant());
         report.setRashi(summary.getRashi());
         report.setSignLord(summary.getSignLord());
@@ -134,12 +124,13 @@ public class KundaliGenerationService {
     private String generateUniqueOrderId() {
         for (int attempt = 0; attempt < 10; attempt++) {
             String orderId = orderIdGenerator.generate();
+
             if (!repository.existsByOrderId(orderId)) {
                 return orderId;
             }
         }
 
-        throw new IllegalStateException("Unable to generate unique Order ID");
+        throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to generate unique Order ID.");
     }
 
     private String clean(String value) {

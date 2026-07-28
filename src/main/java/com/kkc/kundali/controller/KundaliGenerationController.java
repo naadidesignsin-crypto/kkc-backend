@@ -24,22 +24,29 @@ public class KundaliGenerationController {
         return service.generate(request);
     }
 
-    /*
-     * Public non-admin lookup.
-     * User must know exact generated Order ID.
-     * This returns summary + access flags only, not admin list data.
-     */
+    @GetMapping("/reports/{id}")
+    public KundaliReportResponse findById(
+            @PathVariable Long id,
+            @RequestParam String orderId
+    ) {
+        return service.findByIdAndOrderId(id, orderId);
+    }
+
+    @GetMapping("/orders/{orderId}")
+    public KundaliReportResponse findByOrderId(@PathVariable String orderId) {
+        return service.findByOrderId(orderId);
+    }
+
+    @GetMapping("/reports/{id}/summary")
+    public KundaliSummaryResponse findSummaryById(
+            @PathVariable Long id,
+            @RequestParam String orderId
+    ) {
+        return service.findSummaryByIdAndOrderId(id, orderId);
+    }
+
     @GetMapping("/orders/{orderId}/summary")
     public KundaliSummaryResponse findSummaryByOrderId(@PathVariable String orderId) {
         return service.findSummaryByOrderId(orderId);
-    }
-
-    /*
-     * Used immediately after generation because frontend receives internal report id.
-     * Still returns only summary + access flags.
-     */
-    @GetMapping("/reports/{id}/summary")
-    public KundaliSummaryResponse findSummaryById(@PathVariable Long id) {
-        return service.findSummaryById(id);
     }
 }

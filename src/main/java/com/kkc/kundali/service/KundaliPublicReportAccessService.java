@@ -4,6 +4,7 @@ import com.kkc.kundali.entity.KundaliReport;
 import com.kkc.kundali.repository.KundaliReportRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
@@ -15,76 +16,88 @@ public class KundaliPublicReportAccessService {
         this.reportRepository = reportRepository;
     }
 
-    public KundaliReport getReport(Long reportId) {
-        return reportRepository.findById(reportId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Kundali report not found"
-                ));
+    @Transactional(readOnly = true)
+    public KundaliReport requireReportForOrder(Long reportId, String orderId) {
+        if (reportId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Report ID is required.");
+        }
+
+        String cleanOrderId = normalizeOrderId(orderId);
+
+        KundaliReport report = reportRepository.findById(reportId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Kundali report not found."));
+
+        if (report.getOrderId() == null || !report.getOrderId().equalsIgnoreCase(cleanOrderId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Kundali report not found for this Order ID.");
+        }
+
+        return report;
     }
 
-    public void assertPlanetsAllowed(Long reportId) {
-        KundaliReport report = getReport(reportId);
+    @Transactional(readOnly = true)
+    public KundaliReport requireReportByOrderId(String orderId) {
+        String cleanOrderId = normalizeOrderId(orderId);
 
+        return reportRepository.findByOrderId(cleanOrderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Kundali report not found for this Order ID."));
+    }
+
+    public void requirePlanetsAccess(KundaliReport report) {
         if (!Boolean.TRUE.equals(report.getShowPlanets())
                 && !Boolean.TRUE.equals(report.getShowBirthChart())
                 && !Boolean.TRUE.equals(report.getShowHouses())
                 && !Boolean.TRUE.equals(report.getShowNavamsa())
                 && !Boolean.TRUE.equals(report.getShowParashara())) {
-            deny("Planetary positions are not approved for this Order ID.");
+            throwForbidden("Planetary positions are not approved for this Order ID.");
         }
     }
 
-    public void assertDashaAllowed(Long reportId) {
-        KundaliReport report = getReport(reportId);
-
+    public void requireDashaAccess(KundaliReport report) {
         if (!Boolean.TRUE.equals(report.getShowDasha())
                 && !Boolean.TRUE.equals(report.getShowParashara())) {
-            deny("Dasha is not approved for this Order ID.");
+            throwForbidden("Dasha is not approved for this Order ID.");
         }
     }
 
-    public void assertDoshaAllowed(Long reportId) {
-        KundaliReport report = getReport(reportId);
-
+    public void requireDoshaAccess(KundaliReport report) {
         if (!Boolean.TRUE.equals(report.getShowDosha())) {
-            deny("Dosha is not approved for this Order ID.");
+            throwForbidden("Dosha is not approved for this Order ID.");
         }
     }
 
-    public void assertHousesAllowed(Long reportId) {
-        KundaliReport report = getReport(reportId);
-
+    public void requireHousesAccess(KundaliReport report) {
         if (!Boolean.TRUE.equals(report.getShowHouses())) {
-            deny("House analysis is not approved for this Order ID.");
+            throwForbidden("House analysis is not approved for this Order ID.");
         }
     }
 
-    public void assertNavamsaAllowed(Long reportId) {
-        KundaliReport report = getReport(reportId);
-
+    public void requireNavamsaAccess(KundaliReport report) {
         if (!Boolean.TRUE.equals(report.getShowNavamsa())) {
-            deny("Navamsa is not approved for this Order ID.");
+            throwForbidden("Navamsa is not approved for this Order ID.");
         }
     }
 
-    public void assertParasharaAllowed(Long reportId) {
-        KundaliReport report = getReport(reportId);
-
+    public void requireParasharaAccess(KundaliReport report) {
         if (!Boolean.TRUE.equals(report.getShowParashara())) {
-            deny("Parashara interpretation is not approved for this Order ID.");
+            throwForbidden("Parashara reading is not approved for this Order ID.");
         }
     }
 
-    public void assertPdfAllowed(Long reportId) {
-        KundaliReport report = getReport(reportId);
-
+    public void requirePdfAccess(KundaliReport report) {
         if (!Boolean.TRUE.equals(report.getShowPdf())) {
-            deny("PDF download is not approved for this Order ID.");
+            throwForbidden("PDF report is not approved for this Order ID.");
         }
     }
 
-    private void deny(String message) {
+    public String normalizeOrderId(String orderId) {
+        if (orderId == null || orderId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order ID is required.");
+        }
+
+        return orderId.trim().toUpperCase();
+    }
+
+    private void throwForbidden(String message) {
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, message);
     }
 }

@@ -1,6 +1,7 @@
 package com.kkc.kundali.controller;
 
 import com.kkc.kundali.dto.KundaliHouseResponse;
+import com.kkc.kundali.entity.KundaliReport;
 import com.kkc.kundali.service.KundaliHouseService;
 import com.kkc.kundali.service.KundaliPublicReportAccessService;
 import org.springframework.web.bind.annotation.*;
@@ -21,8 +22,13 @@ public class KundaliHouseController {
     }
 
     @GetMapping("/{reportId}/houses")
-    public KundaliHouseResponse getHouseInterpretations(@PathVariable Long reportId) {
-        accessService.assertHousesAllowed(reportId);
+    public KundaliHouseResponse getHouseInterpretations(
+            @PathVariable Long reportId,
+            @RequestParam String orderId
+    ) {
+        KundaliReport report = accessService.requireReportForOrder(reportId, orderId);
+        accessService.requireHousesAccess(report);
+
         return kundaliHouseService.getHouseInterpretations(reportId);
     }
 }

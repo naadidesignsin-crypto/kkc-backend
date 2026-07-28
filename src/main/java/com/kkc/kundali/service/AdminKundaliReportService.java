@@ -35,17 +35,16 @@ public class AdminKundaliReportService {
     @Transactional(readOnly = true)
     public AdminKundaliReportPageResponse findReports(
             KundaliReportStatus status,
+            String search,
             int page,
             int size
     ) {
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), 50);
+        String cleanSearch = search == null ? "" : search.trim();
 
         Pageable pageable = PageRequest.of(safePage, safeSize);
-
-        Page<KundaliReport> reportPage = status == null
-                ? reportRepository.findAllByOrderByCreatedAtDesc(pageable)
-                : reportRepository.findByStatusOrderByCreatedAtDesc(status, pageable);
+        Page<KundaliReport> reportPage = reportRepository.searchReports(status, cleanSearch, pageable);
 
         return new AdminKundaliReportPageResponse(
                 reportPage.getContent()
@@ -80,11 +79,6 @@ public class AdminKundaliReportService {
 
         KundaliReport savedReport = reportRepository.save(report);
 
-        /*
-         * Phase 2:
-         * Admin approval generates required advanced provider sections.
-         * Public frontend never calls section-generation endpoint.
-         */
         sectionService.generateApprovedSections(savedReport);
 
         return KundaliReportResponse.from(savedReport);
@@ -97,7 +91,6 @@ public class AdminKundaliReportService {
         }
 
         long deletedSections = sectionRepository.deleteByReportId(reportId);
-
         reportRepository.deleteById(reportId);
 
         return new AdminDeleteKundaliReportResponse(

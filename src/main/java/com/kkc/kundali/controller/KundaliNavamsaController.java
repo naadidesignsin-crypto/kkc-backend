@@ -1,6 +1,7 @@
 package com.kkc.kundali.controller;
 
 import com.kkc.kundali.dto.KundaliNavamsaResponse;
+import com.kkc.kundali.entity.KundaliReport;
 import com.kkc.kundali.service.KundaliNavamsaService;
 import com.kkc.kundali.service.KundaliPublicReportAccessService;
 import org.springframework.web.bind.annotation.*;
@@ -21,8 +22,13 @@ public class KundaliNavamsaController {
     }
 
     @GetMapping("/{reportId}/navamsa")
-    public KundaliNavamsaResponse getNavamsa(@PathVariable Long reportId) {
-        accessService.assertNavamsaAllowed(reportId);
+    public KundaliNavamsaResponse getNavamsa(
+            @PathVariable Long reportId,
+            @RequestParam String orderId
+    ) {
+        KundaliReport report = accessService.requireReportForOrder(reportId, orderId);
+        accessService.requireNavamsaAccess(report);
+
         return kundaliNavamsaService.getNavamsa(reportId);
     }
 }

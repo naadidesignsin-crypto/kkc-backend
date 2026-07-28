@@ -1,5 +1,6 @@
 package com.kkc.kundali.controller;
 
+import com.kkc.kundali.entity.KundaliReport;
 import com.kkc.kundali.service.KundaliPdfService;
 import com.kkc.kundali.service.KundaliPublicReportAccessService;
 import org.springframework.http.ContentDisposition;
@@ -24,13 +25,16 @@ public class KundaliPdfController {
     }
 
     @GetMapping("/{reportId}/pdf")
-    public ResponseEntity<byte[]> downloadPdf(@PathVariable Long reportId) {
-        accessService.assertPdfAllowed(reportId);
+    public ResponseEntity<byte[]> downloadPdf(
+            @PathVariable Long reportId,
+            @RequestParam String orderId
+    ) {
+        KundaliReport report = accessService.requireReportForOrder(reportId, orderId);
+        accessService.requirePdfAccess(report);
 
         byte[] pdfBytes = pdfService.generateReportPdf(reportId);
 
-        String filename = "kkc-kundali-report-" + reportId + ".pdf";
-
+        String filename = "kkc-kundali-report-" + report.getOrderId() + ".pdf";
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_PDF);
         headers.setContentDisposition(

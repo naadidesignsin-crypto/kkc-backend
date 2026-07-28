@@ -23,10 +23,11 @@ public class AdminKundaliReportController {
     @GetMapping
     public AdminKundaliReportPageResponse findReports(
             @RequestParam(required = false) KundaliReportStatus status,
+            @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return adminKundaliReportService.findReports(status, page, size);
+        return adminKundaliReportService.findReports(status, search, page, size);
     }
 
     @PatchMapping("/{reportId}/access")
