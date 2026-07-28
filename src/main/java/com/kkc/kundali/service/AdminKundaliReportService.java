@@ -1,8 +1,10 @@
 package com.kkc.kundali.service;
 
 import com.kkc.kundali.dto.AdminDeleteKundaliReportResponse;
+import com.kkc.kundali.dto.AdminKundaliReportApprovalRequest;
 import com.kkc.kundali.dto.AdminKundaliReportListItemResponse;
 import com.kkc.kundali.dto.AdminKundaliReportPageResponse;
+import com.kkc.kundali.dto.KundaliReportResponse;
 import com.kkc.kundali.entity.KundaliReport;
 import com.kkc.kundali.repository.KundaliReportRepository;
 import com.kkc.kundali.repository.KundaliReportSectionRepository;
@@ -55,6 +57,28 @@ public class AdminKundaliReportService {
     }
 
     @Transactional
+    public KundaliReportResponse updateReportAccess(
+            Long reportId,
+            AdminKundaliReportApprovalRequest request
+    ) {
+        KundaliReport report = reportRepository.findById(reportId)
+                .orElseThrow(() -> new IllegalArgumentException("Kundali report not found: " + reportId));
+
+        report.setShowSummary(booleanValue(request.showSummary(), true));
+        report.setShowConsultation(booleanValue(request.showConsultation(), true));
+        report.setShowBirthChart(Boolean.TRUE.equals(request.showBirthChart()));
+        report.setShowPlanets(Boolean.TRUE.equals(request.showPlanets()));
+        report.setShowHouses(Boolean.TRUE.equals(request.showHouses()));
+        report.setShowNavamsa(Boolean.TRUE.equals(request.showNavamsa()));
+        report.setShowParashara(Boolean.TRUE.equals(request.showParashara()));
+        report.setShowDasha(Boolean.TRUE.equals(request.showDasha()));
+        report.setShowDosha(Boolean.TRUE.equals(request.showDosha()));
+        report.setShowPdf(Boolean.TRUE.equals(request.showPdf()));
+
+        return KundaliReportResponse.from(reportRepository.save(report));
+    }
+
+    @Transactional
     public AdminDeleteKundaliReportResponse deleteReport(Long reportId) {
         if (!reportRepository.existsById(reportId)) {
             throw new IllegalArgumentException("Kundali report not found: " + reportId);
@@ -99,6 +123,7 @@ public class AdminKundaliReportService {
     private AdminKundaliReportListItemResponse toListItem(KundaliReport report) {
         return new AdminKundaliReportListItemResponse(
                 report.getId(),
+                report.getOrderId(),
                 report.getFullName(),
                 report.getGender(),
                 report.getDateOfBirth(),
@@ -110,7 +135,21 @@ public class AdminKundaliReportService {
                 report.getRashi(),
                 report.getNakshatra(),
                 report.getCurrentDasha(),
+                report.getShowSummary(),
+                report.getShowConsultation(),
+                report.getShowBirthChart(),
+                report.getShowPlanets(),
+                report.getShowHouses(),
+                report.getShowNavamsa(),
+                report.getShowParashara(),
+                report.getShowDasha(),
+                report.getShowDosha(),
+                report.getShowPdf(),
                 report.getCreatedAt()
         );
+    }
+
+    private Boolean booleanValue(Boolean value, boolean defaultValue) {
+        return value == null ? defaultValue : value;
     }
 }

@@ -1,7 +1,9 @@
 package com.kkc.kundali.controller;
 
 import com.kkc.kundali.dto.AdminDeleteKundaliReportResponse;
+import com.kkc.kundali.dto.AdminKundaliReportApprovalRequest;
 import com.kkc.kundali.dto.AdminKundaliReportPageResponse;
+import com.kkc.kundali.dto.KundaliReportResponse;
 import com.kkc.kundali.service.AdminKundaliReportService;
 import com.kkc.kundali.util.KundaliReportStatus;
 import org.springframework.web.bind.annotation.*;
@@ -25,6 +27,14 @@ public class AdminKundaliReportController {
             @RequestParam(defaultValue = "20") int size
     ) {
         return adminKundaliReportService.findReports(status, page, size);
+    }
+
+    @PatchMapping("/{reportId}/access")
+    public KundaliReportResponse updateReportAccess(
+            @PathVariable Long reportId,
+            @RequestBody AdminKundaliReportApprovalRequest request
+    ) {
+        return adminKundaliReportService.updateReportAccess(reportId, request);
     }
 
     @DeleteMapping("/{reportId}")

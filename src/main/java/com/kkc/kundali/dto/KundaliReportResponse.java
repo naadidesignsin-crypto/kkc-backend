@@ -16,6 +16,8 @@ import java.time.LocalTime;
 public class KundaliReportResponse {
 
     private Long id;
+    private String orderId;
+
     private String fullName;
     private String gender;
     private LocalDate dateOfBirth;
@@ -34,6 +36,17 @@ public class KundaliReportResponse {
     private String nakshatraLord;
     private String currentDasha;
 
+    private Boolean showSummary;
+    private Boolean showConsultation;
+    private Boolean showBirthChart;
+    private Boolean showPlanets;
+    private Boolean showHouses;
+    private Boolean showNavamsa;
+    private Boolean showParashara;
+    private Boolean showDasha;
+    private Boolean showDosha;
+    private Boolean showPdf;
+
     private KundaliReportStatus status;
     private String providerResponseJson;
     private String errorMessage;
@@ -43,6 +56,7 @@ public class KundaliReportResponse {
     public static KundaliReportResponse from(KundaliReport report) {
         return KundaliReportResponse.builder()
                 .id(report.getId())
+                .orderId(report.getOrderId())
                 .fullName(report.getFullName())
                 .gender(report.getGender())
                 .dateOfBirth(report.getDateOfBirth())
@@ -59,6 +73,16 @@ public class KundaliReportResponse {
                 .nakshatra(report.getNakshatra())
                 .nakshatraLord(report.getNakshatraLord())
                 .currentDasha(report.getCurrentDasha())
+                .showSummary(report.getShowSummary())
+                .showConsultation(report.getShowConsultation())
+                .showBirthChart(report.getShowBirthChart())
+                .showPlanets(report.getShowPlanets())
+                .showHouses(report.getShowHouses())
+                .showNavamsa(report.getShowNavamsa())
+                .showParashara(report.getShowParashara())
+                .showDasha(report.getShowDasha())
+                .showDosha(report.getShowDosha())
+                .showPdf(report.getShowPdf())
                 .status(report.getStatus())
                 .providerResponseJson(report.getProviderResponseJson())
                 .errorMessage(report.getErrorMessage())

@@ -15,6 +15,7 @@ import java.time.LocalTime;
 public class KundaliSummaryResponse {
 
     private Long id;
+    private String orderId;
 
     private String fullName;
     private String gender;
@@ -29,10 +30,20 @@ public class KundaliSummaryResponse {
     private KundaliReportStatus status;
     private String errorMessage;
 
+    private Boolean showSummary;
+    private Boolean showConsultation;
+    private Boolean showBirthChart;
+    private Boolean showPlanets;
+    private Boolean showHouses;
+    private Boolean showNavamsa;
+    private Boolean showParashara;
+    private Boolean showDasha;
+    private Boolean showDosha;
+    private Boolean showPdf;
+
     private String ascendant;
     private String rashi;
     private String signLord;
-
     private String nakshatra;
     private String nakshatraLord;
     private String charan;

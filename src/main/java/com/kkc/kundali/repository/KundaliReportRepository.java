@@ -9,8 +9,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface KundaliReportRepository extends JpaRepository<KundaliReport, Long> {
+
+    Optional<KundaliReport> findByOrderId(String orderId);
+
+    boolean existsByOrderId(String orderId);
 
     List<KundaliReport> findAllByOrderByCreatedAtDesc();
 

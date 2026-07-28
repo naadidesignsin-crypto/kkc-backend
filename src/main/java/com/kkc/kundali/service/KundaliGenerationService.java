@@ -38,7 +38,9 @@ public class KundaliGenerationService {
 
     @Transactional
     public KundaliReportResponse generate(KundaliGenerateRequest request) {
-        KundaliReport existingReport = findExistingSuccessfulReport(request);
+        String orderId = normalizeOrderId(request.getOrderId());
+
+        KundaliReport existingReport = repository.findByOrderId(orderId).orElse(null);
 
         if (existingReport != null) {
             syncSummarySnapshot(existingReport);
@@ -46,6 +48,7 @@ public class KundaliGenerationService {
         }
 
         KundaliReport report = KundaliReport.builder()
+                .orderId(orderId)
                 .fullName(clean(request.getFullName()))
                 .gender(cleanOptional(request.getGender()))
                 .dateOfBirth(request.getDateOfBirth())
@@ -57,6 +60,16 @@ public class KundaliGenerationService {
                 .language(cleanOptional(request.getLanguage()))
                 .provider("KUNDLI_API")
                 .status(KundaliReportStatus.PENDING)
+                .showSummary(true)
+                .showConsultation(true)
+                .showBirthChart(false)
+                .showPlanets(false)
+                .showHouses(false)
+                .showNavamsa(false)
+                .showParashara(false)
+                .showDasha(false)
+                .showDosha(false)
+                .showPdf(false)
                 .build();
 
         report = repository.save(report);
@@ -170,46 +183,12 @@ public class KundaliGenerationService {
         report.setNakshatraLord(summary.getNakshatraLord());
     }
 
-    private KundaliReport findExistingSuccessfulReport(KundaliGenerateRequest request) {
-        if (request == null
-                || request.getDateOfBirth() == null
-                || request.getTimeOfBirth() == null) {
-            return null;
+    private String normalizeOrderId(String value) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("Order ID is required");
         }
 
-        return repository
-                .findByDateOfBirthAndTimeOfBirthAndStatusOrderByCreatedAtDesc(
-                        request.getDateOfBirth(),
-                        request.getTimeOfBirth(),
-                        KundaliReportStatus.SUCCESS
-                )
-                .stream()
-                .filter(report -> sameText(report.getFullName(), request.getFullName()))
-                .filter(report -> sameText(report.getGender(), request.getGender()))
-                .filter(report -> sameText(report.getTimezone(), request.getTimezone()))
-                .filter(report -> sameNumber(report.getLatitude(), request.getLatitude()))
-                .filter(report -> sameNumber(report.getLongitude(), request.getLongitude()))
-                .findFirst()
-                .orElse(null);
-    }
-
-    private boolean sameText(String left, String right) {
-        String cleanLeft = cleanOptional(left);
-        String cleanRight = cleanOptional(right);
-
-        if (cleanLeft == null || cleanRight == null) {
-            return cleanLeft == null && cleanRight == null;
-        }
-
-        return cleanLeft.equalsIgnoreCase(cleanRight);
-    }
-
-    private boolean sameNumber(Double left, Double right) {
-        if (left == null || right == null) {
-            return false;
-        }
-
-        return Math.abs(left - right) < 0.000001;
+        return value.trim().toUpperCase();
     }
 
     private String clean(String value) {

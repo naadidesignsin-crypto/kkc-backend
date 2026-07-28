@@ -25,6 +25,7 @@ public class KundaliSummaryMapper {
         KundaliSummaryResponse.KundaliSummaryResponseBuilder builder =
                 KundaliSummaryResponse.builder()
                         .id(report.getId())
+                        .orderId(report.getOrderId())
                         .fullName(report.getFullName())
                         .gender(englishNormalizer.normalize(report.getGender()))
                         .dateOfBirth(report.getDateOfBirth())
@@ -36,6 +37,16 @@ public class KundaliSummaryMapper {
                         .provider(report.getProvider())
                         .status(report.getStatus())
                         .errorMessage(report.getErrorMessage())
+                        .showSummary(report.getShowSummary())
+                        .showConsultation(report.getShowConsultation())
+                        .showBirthChart(report.getShowBirthChart())
+                        .showPlanets(report.getShowPlanets())
+                        .showHouses(report.getShowHouses())
+                        .showNavamsa(report.getShowNavamsa())
+                        .showParashara(report.getShowParashara())
+                        .showDasha(report.getShowDasha())
+                        .showDosha(report.getShowDosha())
+                        .showPdf(report.getShowPdf())
                         .createdAt(report.getCreatedAt())
                         .updatedAt(report.getUpdatedAt());
 
@@ -60,33 +71,25 @@ public class KundaliSummaryMapper {
                     .ascendant(english(astroData, "ascendant"))
                     .rashi(english(astroData, "sign"))
                     .signLord(english(astroData, "signLord"))
-
-                    // Provider has typo: "naksahtra".
-                    // Keep fallback for future corrected spelling also.
                     .nakshatra(english(astroData, "nakshatra", "naksahtra"))
                     .nakshatraLord(english(astroData, "nakshatraLord"))
                     .charan(text(astroData, "charan"))
-
                     .varna(english(astroData, "varna"))
                     .vashya(english(astroData, "vashya"))
                     .yoni(english(astroData, "yoni"))
                     .gana(english(astroData, "gana"))
                     .nadi(english(astroData, "nadi"))
-
                     .tithi(english(astroData.path("tithi"), "name"))
                     .yoga(english(astroData.path("yog"), "name"))
                     .karan(english(astroData.path("karan"), "name"))
                     .masa(english(astroData, "masa"))
-
                     .sunrise(text(astroData, "sunrise"))
                     .sunset(text(astroData, "sunset"))
-
                     .tatva(english(astroData, "tatva"))
                     .nameAlphabetHindi(english(astroData, "nameAlphabetHindi"))
                     .nameAlphabetEnglish(text(astroData, "nameAlphabetEnglish"))
                     .paya(english(astroData, "paya"))
                     .build();
-
         } catch (Exception ex) {
             return builder
                     .status(KundaliReportStatus.FAILED)

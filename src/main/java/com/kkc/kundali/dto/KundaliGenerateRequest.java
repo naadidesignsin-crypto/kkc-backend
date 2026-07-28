@@ -13,6 +13,14 @@ import java.time.LocalTime;
 @Builder
 public class KundaliGenerateRequest {
 
+    @NotBlank(message = "Order ID is required")
+    @Size(max = 80, message = "Order ID must be less than 80 characters")
+    @Pattern(
+            regexp = "^[A-Za-z0-9_-]+$",
+            message = "Order ID can contain only letters, numbers, hyphen and underscore"
+    )
+    private String orderId;
+
     @NotBlank(message = "Full name is required")
     @Size(max = 120)
     private String fullName;
