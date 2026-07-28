@@ -1,6 +1,7 @@
 package com.kkc.kundali.controller;
 
 import com.kkc.kundali.service.KundaliPdfService;
+import com.kkc.kundali.service.KundaliPublicReportAccessService;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -12,13 +13,20 @@ import org.springframework.web.bind.annotation.*;
 public class KundaliPdfController {
 
     private final KundaliPdfService pdfService;
+    private final KundaliPublicReportAccessService accessService;
 
-    public KundaliPdfController(KundaliPdfService pdfService) {
+    public KundaliPdfController(
+            KundaliPdfService pdfService,
+            KundaliPublicReportAccessService accessService
+    ) {
         this.pdfService = pdfService;
+        this.accessService = accessService;
     }
 
     @GetMapping("/{reportId}/pdf")
     public ResponseEntity<byte[]> downloadPdf(@PathVariable Long reportId) {
+        accessService.assertPdfAllowed(reportId);
+
         byte[] pdfBytes = pdfService.generateReportPdf(reportId);
 
         String filename = "kkc-kundali-report-" + reportId + ".pdf";

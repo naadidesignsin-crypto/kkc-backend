@@ -80,9 +80,14 @@ public class AdminKundaliReportService {
 
         KundaliReport savedReport = reportRepository.save(report);
 
+        /*
+         * Phase 2:
+         * Admin approval generates required advanced provider sections.
+         * Public frontend never calls section-generation endpoint.
+         */
         sectionService.generateApprovedSections(savedReport);
 
-        return KundaliReportResponse.from(reportRepository.findById(reportId).orElse(savedReport));
+        return KundaliReportResponse.from(savedReport);
     }
 
     @Transactional
