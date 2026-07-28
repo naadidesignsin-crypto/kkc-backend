@@ -1,23 +1,17 @@
 package com.kkc.kundali.service;
 
 import com.kkc.kundali.dto.KundaliGenerateRequest;
-import com.kkc.kundali.dto.KundaliReportListItemResponse;
-import com.kkc.kundali.dto.KundaliReportPageResponse;
 import com.kkc.kundali.dto.KundaliReportResponse;
 import com.kkc.kundali.dto.KundaliSummaryResponse;
 import com.kkc.kundali.dto.ProviderResult;
 import com.kkc.kundali.entity.KundaliReport;
 import com.kkc.kundali.mapper.KundaliSummaryMapper;
 import com.kkc.kundali.repository.KundaliReportRepository;
+import com.kkc.kundali.util.KundaliOrderIdGenerator;
 import com.kkc.kundali.util.KundaliReportStatus;
 import com.kkc.kundali.util.KundliProviderClient;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
 
 @Service
 public class KundaliGenerationService {
@@ -25,30 +19,24 @@ public class KundaliGenerationService {
     private final KundaliReportRepository repository;
     private final KundliProviderClient providerClient;
     private final KundaliSummaryMapper summaryMapper;
+    private final KundaliOrderIdGenerator orderIdGenerator;
 
     public KundaliGenerationService(
             KundaliReportRepository repository,
             KundliProviderClient providerClient,
-            KundaliSummaryMapper summaryMapper
+            KundaliSummaryMapper summaryMapper,
+            KundaliOrderIdGenerator orderIdGenerator
     ) {
         this.repository = repository;
         this.providerClient = providerClient;
         this.summaryMapper = summaryMapper;
+        this.orderIdGenerator = orderIdGenerator;
     }
 
     @Transactional
     public KundaliReportResponse generate(KundaliGenerateRequest request) {
-        String orderId = normalizeOrderId(request.getOrderId());
-
-        KundaliReport existingReport = repository.findByOrderId(orderId).orElse(null);
-
-        if (existingReport != null) {
-            syncSummarySnapshot(existingReport);
-            return KundaliReportResponse.from(repository.save(existingReport));
-        }
-
         KundaliReport report = KundaliReport.builder()
-                .orderId(orderId)
+                .orderId(generateUniqueOrderId())
                 .fullName(clean(request.getFullName()))
                 .gender(cleanOptional(request.getGender()))
                 .dateOfBirth(request.getDateOfBirth())
@@ -95,76 +83,36 @@ public class KundaliGenerationService {
 
     @Transactional(readOnly = true)
     public KundaliReportResponse findById(Long id) {
-        KundaliReport report = repository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Kundali report not found"));
-
-        return KundaliReportResponse.from(report);
+        return KundaliReportResponse.from(findEntityById(id));
     }
 
     @Transactional(readOnly = true)
-    public List<KundaliReportResponse> findAll(KundaliReportStatus status) {
-        List<KundaliReport> reports = status == null
-                ? repository.findAllByOrderByCreatedAtDesc()
-                : repository.findByStatusOrderByCreatedAtDesc(status);
-
-        return reports.stream()
-                .map(KundaliReportResponse::from)
-                .toList();
-    }
-
-    @Transactional(readOnly = true)
-    public KundaliReportPageResponse findGeneratedReports(
-            KundaliReportStatus status,
-            int page,
-            int size
-    ) {
-        int safePage = Math.max(page, 0);
-        int safeSize = Math.min(Math.max(size, 1), 50);
-
-        Pageable pageable = PageRequest.of(safePage, safeSize);
-
-        Page<KundaliReport> reportPage = status == null
-                ? repository.findAllByOrderByCreatedAtDesc(pageable)
-                : repository.findByStatusOrderByCreatedAtDesc(status, pageable);
-
-        return new KundaliReportPageResponse(
-                reportPage.getContent()
-                        .stream()
-                        .map(this::toListItem)
-                        .toList(),
-                reportPage.getNumber(),
-                reportPage.getSize(),
-                reportPage.getTotalElements(),
-                reportPage.getTotalPages()
-        );
+    public KundaliReportResponse findByOrderId(String orderId) {
+        return KundaliReportResponse.from(findEntityByOrderId(orderId));
     }
 
     @Transactional(readOnly = true)
     public KundaliSummaryResponse findSummaryById(Long id) {
-        KundaliReport report = repository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Kundali report not found"));
-
-        return summaryMapper.from(report);
+        return summaryMapper.from(findEntityById(id));
     }
 
-    private KundaliReportListItemResponse toListItem(KundaliReport report) {
-        return new KundaliReportListItemResponse(
-                report.getId(),
-                report.getFullName(),
-                report.getGender(),
-                report.getDateOfBirth(),
-                report.getTimeOfBirth(),
-                report.getBirthPlace(),
-                report.getProvider(),
-                report.getStatus() != null ? report.getStatus().name() : null,
-                report.getAscendant(),
-                report.getRashi(),
-                report.getSignLord(),
-                report.getNakshatra(),
-                report.getNakshatraLord(),
-                report.getCurrentDasha(),
-                report.getCreatedAt()
-        );
+    @Transactional(readOnly = true)
+    public KundaliSummaryResponse findSummaryByOrderId(String orderId) {
+        return summaryMapper.from(findEntityByOrderId(orderId));
+    }
+
+    private KundaliReport findEntityById(Long id) {
+        return repository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Kundali report not found"));
+    }
+
+    private KundaliReport findEntityByOrderId(String orderId) {
+        if (orderId == null || orderId.isBlank()) {
+            throw new IllegalArgumentException("Order ID is required");
+        }
+
+        return repository.findByOrderId(orderId.trim().toUpperCase())
+                .orElseThrow(() -> new IllegalArgumentException("Kundali report not found for Order ID: " + orderId));
     }
 
     private void syncSummarySnapshot(KundaliReport report) {
@@ -183,12 +131,15 @@ public class KundaliGenerationService {
         report.setNakshatraLord(summary.getNakshatraLord());
     }
 
-    private String normalizeOrderId(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Order ID is required");
+    private String generateUniqueOrderId() {
+        for (int attempt = 0; attempt < 10; attempt++) {
+            String orderId = orderIdGenerator.generate();
+            if (!repository.existsByOrderId(orderId)) {
+                return orderId;
+            }
         }
 
-        return value.trim().toUpperCase();
+        throw new IllegalStateException("Unable to generate unique Order ID");
     }
 
     private String clean(String value) {

@@ -17,7 +17,6 @@ public class KundaliReportResponse {
 
     private Long id;
     private String orderId;
-
     private String fullName;
     private String gender;
     private LocalDate dateOfBirth;

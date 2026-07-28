@@ -161,44 +161,15 @@ public class KundaliReport {
     }
 
     private void applyAccessDefaults() {
-        if (this.showSummary == null) {
-            this.showSummary = true;
-        }
-
-        if (this.showConsultation == null) {
-            this.showConsultation = true;
-        }
-
-        if (this.showBirthChart == null) {
-            this.showBirthChart = false;
-        }
-
-        if (this.showPlanets == null) {
-            this.showPlanets = false;
-        }
-
-        if (this.showHouses == null) {
-            this.showHouses = false;
-        }
-
-        if (this.showNavamsa == null) {
-            this.showNavamsa = false;
-        }
-
-        if (this.showParashara == null) {
-            this.showParashara = false;
-        }
-
-        if (this.showDasha == null) {
-            this.showDasha = false;
-        }
-
-        if (this.showDosha == null) {
-            this.showDosha = false;
-        }
-
-        if (this.showPdf == null) {
-            this.showPdf = false;
-        }
+        if (this.showSummary == null) this.showSummary = true;
+        if (this.showConsultation == null) this.showConsultation = true;
+        if (this.showBirthChart == null) this.showBirthChart = false;
+        if (this.showPlanets == null) this.showPlanets = false;
+        if (this.showHouses == null) this.showHouses = false;
+        if (this.showNavamsa == null) this.showNavamsa = false;
+        if (this.showParashara == null) this.showParashara = false;
+        if (this.showDasha == null) this.showDasha = false;
+        if (this.showDosha == null) this.showDosha = false;
+        if (this.showPdf == null) this.showPdf = false;
     }
 }

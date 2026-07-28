@@ -20,13 +20,16 @@ public class AdminKundaliReportService {
 
     private final KundaliReportRepository reportRepository;
     private final KundaliReportSectionRepository sectionRepository;
+    private final KundaliReportSectionService sectionService;
 
     public AdminKundaliReportService(
             KundaliReportRepository reportRepository,
-            KundaliReportSectionRepository sectionRepository
+            KundaliReportSectionRepository sectionRepository,
+            KundaliReportSectionService sectionService
     ) {
         this.reportRepository = reportRepository;
         this.sectionRepository = sectionRepository;
+        this.sectionService = sectionService;
     }
 
     @Transactional(readOnly = true)
@@ -75,7 +78,11 @@ public class AdminKundaliReportService {
         report.setShowDosha(Boolean.TRUE.equals(request.showDosha()));
         report.setShowPdf(Boolean.TRUE.equals(request.showPdf()));
 
-        return KundaliReportResponse.from(reportRepository.save(report));
+        KundaliReport savedReport = reportRepository.save(report);
+
+        sectionService.generateApprovedSections(savedReport);
+
+        return KundaliReportResponse.from(reportRepository.findById(reportId).orElse(savedReport));
     }
 
     @Transactional

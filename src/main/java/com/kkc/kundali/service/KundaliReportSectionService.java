@@ -106,6 +106,30 @@ public class KundaliReportSectionService {
         }
     }
 
+    @Transactional
+    public void generateApprovedSections(KundaliReport report) {
+        if (report == null || report.getId() == null) {
+            return;
+        }
+
+        if (Boolean.TRUE.equals(report.getShowBirthChart())
+                || Boolean.TRUE.equals(report.getShowPlanets())
+                || Boolean.TRUE.equals(report.getShowHouses())
+                || Boolean.TRUE.equals(report.getShowNavamsa())
+                || Boolean.TRUE.equals(report.getShowParashara())) {
+            generateSection(report.getId(), KundaliReportSectionType.PLANETARY_POSITIONS);
+        }
+
+        if (Boolean.TRUE.equals(report.getShowDasha())
+                || Boolean.TRUE.equals(report.getShowParashara())) {
+            generateSection(report.getId(), KundaliReportSectionType.DASHA);
+        }
+
+        if (Boolean.TRUE.equals(report.getShowDosha())) {
+            generateSection(report.getId(), KundaliReportSectionType.DOSHA);
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<KundaliReportSectionResponse> findSections(Long reportId) {
         if (!reportRepository.existsById(reportId)) {
@@ -140,7 +164,7 @@ public class KundaliReportSectionService {
                     reportRepository.save(report);
                 }
             } catch (Exception ignored) {
-                // Do not fail section generation just because snapshot update failed.
+                // Do not fail section generation because snapshot update failed.
             }
         }
     }

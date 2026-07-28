@@ -29,8 +29,18 @@ public class KundaliGenerationController {
         return service.findById(id);
     }
 
+    @GetMapping("/orders/{orderId}")
+    public KundaliReportResponse findByOrderId(@PathVariable String orderId) {
+        return service.findByOrderId(orderId);
+    }
+
     @GetMapping("/reports/{id}/summary")
     public KundaliSummaryResponse findSummaryById(@PathVariable Long id) {
         return service.findSummaryById(id);
+    }
+
+    @GetMapping("/orders/{orderId}/summary")
+    public KundaliSummaryResponse findSummaryByOrderId(@PathVariable String orderId) {
+        return service.findSummaryByOrderId(orderId);
     }
 }

@@ -16,7 +16,6 @@ public class KundaliSummaryResponse {
 
     private Long id;
     private String orderId;
-
     private String fullName;
     private String gender;
     private LocalDate dateOfBirth;
@@ -25,7 +24,6 @@ public class KundaliSummaryResponse {
     private Double latitude;
     private Double longitude;
     private String timezone;
-
     private String provider;
     private KundaliReportStatus status;
     private String errorMessage;
@@ -47,26 +45,21 @@ public class KundaliSummaryResponse {
     private String nakshatra;
     private String nakshatraLord;
     private String charan;
-
     private String varna;
     private String vashya;
     private String yoni;
     private String gana;
     private String nadi;
-
     private String tithi;
     private String yoga;
     private String karan;
     private String masa;
-
     private String sunrise;
     private String sunset;
-
     private String tatva;
     private String nameAlphabetHindi;
     private String nameAlphabetEnglish;
     private String paya;
-
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
