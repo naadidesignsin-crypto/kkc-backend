@@ -42,3 +42,8 @@ location:
     base-url: https://nominatim.openstreetmap.org
     country-codes: in
     user-agent: KKC-Astrology/1.0 contact:kalagavinay@gmail.com
+
+admin:
+  security:
+    username: ${ADMIN_USERNAME:admin}
+    password: ${ADMIN_PASSWORD:admin123}

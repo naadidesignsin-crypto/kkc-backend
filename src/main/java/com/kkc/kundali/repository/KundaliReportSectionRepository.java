@@ -15,4 +15,8 @@ public interface KundaliReportSectionRepository extends JpaRepository<KundaliRep
             Long reportId,
             KundaliReportSectionType sectionType
     );
+
+    long deleteByReportId(Long reportId);
+
+    long countByReportId(Long reportId);
 }
