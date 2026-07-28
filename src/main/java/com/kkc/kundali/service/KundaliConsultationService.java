@@ -28,7 +28,7 @@ public class KundaliConsultationService {
     public KundaliConsultationService(
             KundaliReportRepository reportRepository,
             KundaliConsultationRequestRepository consultationRepository,
-            @Value("${app.whatsapp.number:919700051668}") String whatsappNumber
+            @Value("${app.whatsapp.number:917981041123}") String whatsappNumber
     ) {
         this.reportRepository = reportRepository;
         this.consultationRepository = consultationRepository;
