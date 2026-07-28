@@ -86,24 +86,89 @@ public class KundaliGenerationService {
         }
     }
 
+    /*
+     * Internal/admin-compatible lookup.
+     * Required by existing services like KundaliParasharaService and KundaliPdfService.
+     */
+    @Transactional(readOnly = true)
+    public KundaliReportResponse findById(Long id) {
+        KundaliReport report = repository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Kundali report not found"
+                ));
+
+        return KundaliReportResponse.from(report);
+    }
+
+    /*
+     * Internal/admin-compatible summary lookup.
+     * Do not remove. Existing backend services still depend on this method.
+     */
+    @Transactional(readOnly = true)
+    public KundaliSummaryResponse findSummaryById(Long id) {
+        KundaliReport report = repository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Kundali report not found"
+                ));
+
+        return summaryMapper.from(report);
+    }
+
+    /*
+     * Privacy-safe public lookup.
+     * Requires both internal report id and public order id.
+     */
     @Transactional(readOnly = true)
     public KundaliReportResponse findByIdAndOrderId(Long id, String orderId) {
-        return KundaliReportResponse.from(publicReportAccessService.requireReportForOrder(id, orderId));
+        KundaliReport report = publicReportAccessService.requireReportForOrder(
+                id,
+                orderId
+        );
+
+        return KundaliReportResponse.from(report);
     }
 
+    /*
+     * Privacy-safe public lookup by exact Order ID.
+     */
     @Transactional(readOnly = true)
     public KundaliReportResponse findByOrderId(String orderId) {
-        return KundaliReportResponse.from(publicReportAccessService.requireReportByOrderId(orderId));
+        KundaliReport report = publicReportAccessService.requireReportByOrderId(
+                orderId
+        );
+
+        return KundaliReportResponse.from(report);
     }
 
+    /*
+     * Privacy-safe public summary lookup.
+     * Requires both internal report id and public order id.
+     */
     @Transactional(readOnly = true)
-    public KundaliSummaryResponse findSummaryByIdAndOrderId(Long id, String orderId) {
-        return summaryMapper.from(publicReportAccessService.requireReportForOrder(id, orderId));
+    public KundaliSummaryResponse findSummaryByIdAndOrderId(
+            Long id,
+            String orderId
+    ) {
+        KundaliReport report = publicReportAccessService.requireReportForOrder(
+                id,
+                orderId
+        );
+
+        return summaryMapper.from(report);
     }
 
+    /*
+     * Privacy-safe public summary lookup by exact Order ID.
+     */
     @Transactional(readOnly = true)
     public KundaliSummaryResponse findSummaryByOrderId(String orderId) {
-        return summaryMapper.from(publicReportAccessService.requireReportByOrderId(orderId));
+        KundaliReport report = publicReportAccessService.requireReportByOrderId(
+                orderId
+        );
+
+        return summaryMapper.from(report);
     }
 
     private void syncSummarySnapshot(KundaliReport report) {
@@ -114,6 +179,7 @@ public class KundaliGenerationService {
         }
 
         KundaliSummaryResponse summary = summaryMapper.from(report);
+
         report.setAscendant(summary.getAscendant());
         report.setRashi(summary.getRashi());
         report.setSignLord(summary.getSignLord());
@@ -130,7 +196,10 @@ public class KundaliGenerationService {
             }
         }
 
-        throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to generate unique Order ID.");
+        throw new ResponseStatusException(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "Unable to generate unique Order ID."
+        );
     }
 
     private String clean(String value) {
