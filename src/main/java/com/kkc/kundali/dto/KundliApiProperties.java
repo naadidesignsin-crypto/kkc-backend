@@ -12,4 +12,5 @@ public class KundliApiProperties {
     private String baseUrl;
     private String apiKey;
     private String astroDataPath;
+    private String panchangPath;
 }
