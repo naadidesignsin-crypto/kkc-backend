@@ -11,12 +11,17 @@ import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.DayOfWeek;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.springframework.http.HttpStatus.BAD_GATEWAY;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
@@ -30,6 +35,11 @@ public class DailyPanchangService {
     private static final String DEFAULT_PLACE_KEY = "hyderabad";
     private static final String DEFAULT_PANCHANG_PATH =
             "/api/panchang/get_panchang_data";
+    private static final DateTimeFormatter TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("HH:mm:ss");
+    private static final Pattern TIME_PATTERN = Pattern.compile(
+            "(\\d{1,2})\\s*:\\s*(\\d{2})(?:\\s*:\\s*(\\d{2}))?\\s*(AM|PM|am|pm)?"
+    );
 
     private static final Map<String, String> PAKSHAM = new LinkedHashMap<>();
     private static final Map<String, String> TITHI = new LinkedHashMap<>();
@@ -228,6 +238,76 @@ public class DailyPanchangService {
                 "Season"
         );
 
+        String sunrise = read(response, "sunrise", "sunRise", "sun_rise");
+        String sunset = read(response, "sunset", "sunSet", "sun_set");
+
+        String rawRahuKalam = read(
+                response,
+                "rahuKaal",
+                "rahuKalam",
+                "rahukaal",
+                "rahu_kaal",
+                "rahu_kalam",
+                "rahuKaalTime",
+                "rahu_kalam_time",
+                "rahuKaalPeriod",
+                "rahu_kaal_period"
+        );
+
+        String rawYamagandam = read(
+                response,
+                "yamaganda",
+                "yamagandam",
+                "yamaGandam",
+                "yama_gandam",
+                "yamghantKaal",
+                "yamghanta",
+                "yamaghant",
+                "yamaKandam",
+                "yama_kandam"
+        );
+
+        String rawGulikaKalam = read(
+                response,
+                "gulikaKaal",
+                "gulikaKalam",
+                "gulika",
+                "gulikKaal",
+                "gulika_kaal",
+                "gulikaKaalTime",
+                "gulika_kalam_time"
+        );
+
+        String rawDurmuhurtham = read(
+                response,
+                "durmuhurat",
+                "durmuhurtham",
+                "dur_muhurat",
+                "durmuhurta",
+                "durMuhurtham",
+                "dur_muhurtham"
+        );
+
+        String rawVarjyam = read(response, "varjyam", "varja", "varjam");
+
+        String rawAmritaKalam = read(
+                response,
+                "amritKaal",
+                "amritaKalam",
+                "amritKalam",
+                "amrita_kaalam",
+                "amrita_kalam"
+        );
+
+        String rawAbhijitMuhurtham = read(
+                response,
+                "abhijitMuhurta",
+                "abhijitMuhurtham",
+                "abhijit",
+                "abhijit_muhurta",
+                "abhijit_muhurtham"
+        );
+
         return DailyPanchangResponse.builder()
                 .date(date)
                 .place(place.label())
@@ -247,55 +327,20 @@ public class DailyPanchangService {
                 .samvatsaram(formatSamvatsaram(rawSamvatsaram, date))
                 .ayanam(formatAyanam(rawAyanam, date))
                 .ritu(formatRitu(rawRitu, date))
-                .sunrise(read(response, "sunrise", "sunRise", "sun_rise"))
-                .sunset(read(response, "sunset", "sunSet", "sun_set"))
+                .sunrise(sunrise)
+                .sunset(sunset)
                 .moonrise(read(response, "moonrise", "moonRise", "moon_rise"))
                 .moonset(read(response, "moonset", "moonSet", "moon_set"))
-                .rahuKalam(read(
-                        response,
-                        "rahuKaal",
-                        "rahuKalam",
-                        "rahukaal",
-                        "rahu_kaal",
-                        "rahu_kalam"
-                ))
-                .yamagandam(read(
-                        response,
-                        "yamaganda",
-                        "yamagandam",
-                        "yamghantKaal",
-                        "yamghanta",
-                        "yamaghant"
-                ))
-                .gulikaKalam(read(
-                        response,
-                        "gulikaKaal",
-                        "gulikaKalam",
-                        "gulika",
-                        "gulikKaal",
-                        "gulika_kaal"
-                ))
-                .durmuhurtham(read(
-                        response,
-                        "durmuhurat",
-                        "durmuhurtham",
-                        "dur_muhurat",
-                        "durmuhurta"
-                ))
-                .varjyam(read(response, "varjyam", "varja", "varjam"))
-                .amritaKalam(read(
-                        response,
-                        "amritKaal",
-                        "amritaKalam",
-                        "amritKalam",
-                        "amrita_kaalam"
-                ))
-                .abhijitMuhurtham(read(
-                        response,
-                        "abhijitMuhurta",
-                        "abhijitMuhurtham",
-                        "abhijit",
-                        "abhijit_muhurta"
+                .rahuKalam(formatRahuKalam(rawRahuKalam, date, sunrise, sunset))
+                .yamagandam(formatYamagandam(rawYamagandam, date, sunrise, sunset))
+                .gulikaKalam(formatGulikaKalam(rawGulikaKalam, date, sunrise, sunset))
+                .durmuhurtham(formatProviderOnlyTiming(rawDurmuhurtham))
+                .varjyam(formatProviderOnlyTiming(rawVarjyam))
+                .amritaKalam(formatProviderOnlyTiming(rawAmritaKalam))
+                .abhijitMuhurtham(formatAbhijitMuhurtham(
+                        rawAbhijitMuhurtham,
+                        sunrise,
+                        sunset
                 ))
                 .source("KundliAPI")
                 .note("Daily Panchangam is generated for South Andhra & Telangana display style using selected date and place.")
@@ -737,6 +782,207 @@ public class DailyPanchangService {
         }
 
         return null;
+    }
+
+    private String formatRahuKalam(
+            String raw,
+            LocalDate date,
+            String sunrise,
+            String sunset
+    ) {
+        String providerValue = cleanText(raw);
+
+        if (providerValue != null && !providerValue.equals("-")) {
+            return providerValue;
+        }
+
+        return calculateDaySegmentTiming(
+                date.getDayOfWeek(),
+                sunrise,
+                sunset,
+                Map.of(
+                        DayOfWeek.SUNDAY, 8,
+                        DayOfWeek.MONDAY, 2,
+                        DayOfWeek.TUESDAY, 7,
+                        DayOfWeek.WEDNESDAY, 5,
+                        DayOfWeek.THURSDAY, 6,
+                        DayOfWeek.FRIDAY, 4,
+                        DayOfWeek.SATURDAY, 3
+                )
+        );
+    }
+
+    private String formatYamagandam(
+            String raw,
+            LocalDate date,
+            String sunrise,
+            String sunset
+    ) {
+        String providerValue = cleanText(raw);
+
+        if (providerValue != null && !providerValue.equals("-")) {
+            return providerValue;
+        }
+
+        return calculateDaySegmentTiming(
+                date.getDayOfWeek(),
+                sunrise,
+                sunset,
+                Map.of(
+                        DayOfWeek.SUNDAY, 5,
+                        DayOfWeek.MONDAY, 4,
+                        DayOfWeek.TUESDAY, 3,
+                        DayOfWeek.WEDNESDAY, 2,
+                        DayOfWeek.THURSDAY, 1,
+                        DayOfWeek.FRIDAY, 7,
+                        DayOfWeek.SATURDAY, 6
+                )
+        );
+    }
+
+    private String formatGulikaKalam(
+            String raw,
+            LocalDate date,
+            String sunrise,
+            String sunset
+    ) {
+        String providerValue = cleanText(raw);
+
+        if (providerValue != null && !providerValue.equals("-")) {
+            return providerValue;
+        }
+
+        return calculateDaySegmentTiming(
+                date.getDayOfWeek(),
+                sunrise,
+                sunset,
+                Map.of(
+                        DayOfWeek.SUNDAY, 7,
+                        DayOfWeek.MONDAY, 6,
+                        DayOfWeek.TUESDAY, 5,
+                        DayOfWeek.WEDNESDAY, 4,
+                        DayOfWeek.THURSDAY, 3,
+                        DayOfWeek.FRIDAY, 2,
+                        DayOfWeek.SATURDAY, 1
+                )
+        );
+    }
+
+    private String formatAbhijitMuhurtham(
+            String raw,
+            String sunrise,
+            String sunset
+    ) {
+        String providerValue = cleanText(raw);
+
+        if (providerValue != null && !providerValue.equals("-")) {
+            return providerValue;
+        }
+
+        LocalTime sunriseTime = parseFirstTime(sunrise);
+        LocalTime sunsetTime = parseFirstTime(sunset);
+
+        if (sunriseTime == null || sunsetTime == null) {
+            return "-";
+        }
+
+        long daySeconds = Duration.between(sunriseTime, sunsetTime).getSeconds();
+
+        if (daySeconds <= 0) {
+            return "-";
+        }
+
+        LocalTime solarNoon = sunriseTime.plusSeconds(daySeconds / 2);
+        LocalTime start = solarNoon.minusMinutes(24);
+        LocalTime end = solarNoon.plusMinutes(24);
+
+        return formatTimeRange(start, end);
+    }
+
+    private String formatProviderOnlyTiming(String raw) {
+        String providerValue = cleanText(raw);
+
+        if (providerValue == null || providerValue.equals("-")) {
+            return "-";
+        }
+
+        return providerValue;
+    }
+
+    private String calculateDaySegmentTiming(
+            DayOfWeek dayOfWeek,
+            String sunrise,
+            String sunset,
+            Map<DayOfWeek, Integer> segmentMap
+    ) {
+        LocalTime sunriseTime = parseFirstTime(sunrise);
+        LocalTime sunsetTime = parseFirstTime(sunset);
+
+        if (sunriseTime == null || sunsetTime == null) {
+            return "-";
+        }
+
+        long daySeconds = Duration.between(sunriseTime, sunsetTime).getSeconds();
+
+        if (daySeconds <= 0) {
+            return "-";
+        }
+
+        Integer segmentNumber = segmentMap.get(dayOfWeek);
+
+        if (segmentNumber == null || segmentNumber < 1 || segmentNumber > 8) {
+            return "-";
+        }
+
+        long segmentSeconds = daySeconds / 8;
+        LocalTime start = sunriseTime.plusSeconds(segmentSeconds * (segmentNumber - 1));
+        LocalTime end = start.plusSeconds(segmentSeconds);
+
+        return formatTimeRange(start, end);
+    }
+
+    private LocalTime parseFirstTime(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+
+        Matcher matcher = TIME_PATTERN.matcher(value);
+
+        if (!matcher.find()) {
+            return null;
+        }
+
+        int hour = Integer.parseInt(matcher.group(1));
+        int minute = Integer.parseInt(matcher.group(2));
+        int second = matcher.group(3) == null
+                ? 0
+                : Integer.parseInt(matcher.group(3));
+        String meridiem = matcher.group(4);
+
+        if (meridiem != null) {
+            String cleanMeridiem = meridiem.toUpperCase(Locale.ENGLISH);
+
+            if ("PM".equals(cleanMeridiem) && hour < 12) {
+                hour += 12;
+            }
+
+            if ("AM".equals(cleanMeridiem) && hour == 12) {
+                hour = 0;
+            }
+        }
+
+        if (hour < 0 || hour > 23 || minute < 0 || minute > 59
+                || second < 0 || second > 59) {
+            return null;
+        }
+
+        return LocalTime.of(hour, minute, second);
+    }
+
+    private String formatTimeRange(LocalTime start, LocalTime end) {
+        return start.format(TIME_FORMATTER)
+                + " to "
+                + end.format(TIME_FORMATTER);
     }
 
     private String findMappedValue(String raw, Map<String, String> map) {
