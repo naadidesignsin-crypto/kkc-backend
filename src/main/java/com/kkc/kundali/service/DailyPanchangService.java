@@ -37,6 +37,9 @@ public class DailyPanchangService {
     private static final Map<String, String> YOGA = new LinkedHashMap<>();
     private static final Map<String, String> KARANA = new LinkedHashMap<>();
     private static final Map<String, String> MASAM = new LinkedHashMap<>();
+    private static final Map<String, String> SAMVATSARAM = new LinkedHashMap<>();
+    private static final Map<String, String> AYANAM = new LinkedHashMap<>();
+    private static final Map<String, String> RITU = new LinkedHashMap<>();
 
     static {
         loadPaksham();
@@ -45,6 +48,9 @@ public class DailyPanchangService {
         loadYoga();
         loadKarana();
         loadMasam();
+        loadSamvatsaram();
+        loadAyanam();
+        loadRitu();
     }
 
     private final KundliApiProperties properties;
@@ -186,6 +192,42 @@ public class DailyPanchangService {
                 "maah"
         );
 
+        String rawSamvatsaram = read(
+                response,
+                "samvatsaram",
+                "samvatsara",
+                "Samvatsaram",
+                "Samvatsara",
+                "samvatsaraName",
+                "samvatsara_name",
+                "samvatsaramName",
+                "samvatsaram_name",
+                "hinduYearName",
+                "hindu_year_name",
+                "yearName",
+                "year_name",
+                "samvat"
+        );
+
+        String rawAyanam = read(
+                response,
+                "ayanam",
+                "ayana",
+                "Ayanam",
+                "Ayana",
+                "ayan",
+                "uttarayanaDakshinayana",
+                "uttarayana_dakshinayana"
+        );
+
+        String rawRitu = read(
+                response,
+                "ritu",
+                "Ritu",
+                "season",
+                "Season"
+        );
+
         return DailyPanchangResponse.builder()
                 .date(date)
                 .place(place.label())
@@ -202,16 +244,9 @@ public class DailyPanchangService {
                 .karanam(formatSingle(rawKarana, KARANA))
                 .paksham(formatPaksham(rawPaksha, rawTithi))
                 .masam(formatSingle(rawMasam, MASAM))
-                .samvatsaram(read(
-                        response,
-                        "samvat",
-                        "samvatsara",
-                        "samvatsaram",
-                        "vikramSamvat",
-                        "shakaSamvat"
-                ))
-                .ayanam(read(response, "ayana", "ayanam", "ayan"))
-                .ritu(read(response, "ritu", "season"))
+                .samvatsaram(formatSingle(rawSamvatsaram, SAMVATSARAM))
+                .ayanam(formatAyanam(rawAyanam, date))
+                .ritu(formatRitu(rawRitu, date))
                 .sunrise(read(response, "sunrise", "sunRise", "sun_rise"))
                 .sunset(read(response, "sunset", "sunSet", "sun_set"))
                 .moonrise(read(response, "moonrise", "moonRise", "moon_rise"))
@@ -542,6 +577,49 @@ public class DailyPanchangService {
         return findMappedValue(raw, map);
     }
 
+    private String formatAyanam(String raw, LocalDate date) {
+        String formatted = formatSingle(raw, AYANAM);
+
+        if (!"-".equals(formatted)) {
+            return formatted;
+        }
+
+        int month = date.getMonthValue();
+        int day = date.getDayOfMonth();
+
+        boolean uttarayana = month > 1 && month < 7;
+
+        if (month == 1) {
+            uttarayana = day >= 14;
+        }
+
+        if (month == 7) {
+            uttarayana = day <= 16;
+        }
+
+        return uttarayana
+                ? "ఉత్తరాయణం / Uttarayana"
+                : "దక్షిణాయనం / Dakshinayana";
+    }
+
+    private String formatRitu(String raw, LocalDate date) {
+        String formatted = formatSingle(raw, RITU);
+
+        if (!"-".equals(formatted)) {
+            return formatted;
+        }
+
+        return switch (date.getMonthValue()) {
+            case 3, 4 -> "వసంత ఋతువు / Vasanta Ritu";
+            case 5, 6 -> "గ్రీష్మ ఋతువు / Grishma Ritu";
+            case 7, 8 -> "వర్ష ఋతువు / Varsha Ritu";
+            case 9, 10 -> "శరదృతువు / Sharad Ritu";
+            case 11, 12 -> "హేమంత ఋతువు / Hemanta Ritu";
+            case 1, 2 -> "శిశిర ఋతువు / Shishira Ritu";
+            default -> "-";
+        };
+    }
+
     private String findMappedValue(String raw, Map<String, String> map) {
         if (raw == null || raw.isBlank()) {
             return "-";
@@ -553,7 +631,15 @@ public class DailyPanchangService {
         for (Map.Entry<String, String> entry : map.entrySet()) {
             String key = entry.getKey().toLowerCase(Locale.ENGLISH);
 
-            if (lower.equals(key) || lower.contains(key)) {
+            if (lower.equals(key)) {
+                return entry.getValue();
+            }
+        }
+
+        for (Map.Entry<String, String> entry : map.entrySet()) {
+            String key = entry.getKey().toLowerCase(Locale.ENGLISH);
+
+            if (lower.contains(key)) {
                 return entry.getValue();
             }
         }
@@ -954,6 +1040,128 @@ public class DailyPanchangService {
         MASAM.put("phalguna", "ఫాల్గుణం / Phalguna");
         MASAM.put("phalgun", "ఫాల్గుణం / Phalguna");
         MASAM.put("फाल्गुन", "ఫాల్గుణం / Phalguna");
+    }
+
+    private static void loadSamvatsaram() {
+        SAMVATSARAM.put("prabhava", "ప్రభవ / Prabhava");
+        SAMVATSARAM.put("vibhava", "విభవ / Vibhava");
+        SAMVATSARAM.put("shukla", "శుక్ల / Shukla");
+        SAMVATSARAM.put("sukla", "శుక్ల / Shukla");
+        SAMVATSARAM.put("pramodoota", "ప్రమోదూత / Pramodoota");
+        SAMVATSARAM.put("pramoda", "ప్రమోదూత / Pramodoota");
+        SAMVATSARAM.put("prajotpatti", "ప్రజోత్పత్తి / Prajotpatti");
+        SAMVATSARAM.put("angirasa", "ఆంగీరస / Angirasa");
+        SAMVATSARAM.put("srimukha", "శ్రీముఖ / Srimukha");
+        SAMVATSARAM.put("shrimukha", "శ్రీముఖ / Srimukha");
+        SAMVATSARAM.put("bhava", "భావ / Bhava");
+        SAMVATSARAM.put("yuva", "యువ / Yuva");
+        SAMVATSARAM.put("dhata", "ధాత / Dhata");
+        SAMVATSARAM.put("ishvara", "ఈశ్వర / Ishvara");
+        SAMVATSARAM.put("eeshwara", "ఈశ్వర / Ishvara");
+        SAMVATSARAM.put("bahudhanya", "బహుధాన్య / Bahudhanya");
+        SAMVATSARAM.put("pramathi", "ప్రమాథి / Pramathi");
+        SAMVATSARAM.put("vikrama", "విక్రమ / Vikrama");
+        SAMVATSARAM.put("vrisha", "వృష / Vrisha");
+        SAMVATSARAM.put("chitrabhanu", "చిత్రభాను / Chitrabhanu");
+        SAMVATSARAM.put("svabhanu", "స్వభాను / Svabhanu");
+        SAMVATSARAM.put("swabhanu", "స్వభాను / Svabhanu");
+        SAMVATSARAM.put("tarana", "తారణ / Tarana");
+        SAMVATSARAM.put("parthiva", "పార్థివ / Parthiva");
+        SAMVATSARAM.put("vyaya", "వ్యయ / Vyaya");
+        SAMVATSARAM.put("sarvajit", "సర్వజిత్ / Sarvajit");
+        SAMVATSARAM.put("sarvadhari", "సర్వధారి / Sarvadhari");
+        SAMVATSARAM.put("virodhi", "విరోధి / Virodhi");
+        SAMVATSARAM.put("vikriti", "వికృతి / Vikriti");
+        SAMVATSARAM.put("khara", "ఖర / Khara");
+        SAMVATSARAM.put("nandana", "నందన / Nandana");
+        SAMVATSARAM.put("vijaya", "విజయ / Vijaya");
+        SAMVATSARAM.put("jaya", "జయ / Jaya");
+        SAMVATSARAM.put("manmatha", "మన్మథ / Manmatha");
+        SAMVATSARAM.put("durmukhi", "దుర్ముఖి / Durmukhi");
+        SAMVATSARAM.put("hevilambi", "హేవిళంబి / Hevilambi");
+        SAMVATSARAM.put("hemalambi", "హేవిళంబి / Hevilambi");
+        SAMVATSARAM.put("vilambi", "విళంబి / Vilambi");
+        SAMVATSARAM.put("vikari", "వికారి / Vikari");
+        SAMVATSARAM.put("sharvari", "శార్వరి / Sharvari");
+        SAMVATSARAM.put("sarvari", "శార్వరి / Sharvari");
+        SAMVATSARAM.put("plava", "ప్లవ / Plava");
+        SAMVATSARAM.put("subhakritu", "శుభకృతు / Subhakritu");
+        SAMVATSARAM.put("shubhakruthu", "శుభకృతు / Subhakritu");
+        SAMVATSARAM.put("shobhakritu", "శోభకృతు / Shobhakritu");
+        SAMVATSARAM.put("shobhakruthu", "శోభకృతు / Shobhakritu");
+        SAMVATSARAM.put("krodhi", "క్రోధి / Krodhi");
+        SAMVATSARAM.put("viswavasu", "విశ్వావసు / Vishvavasu");
+        SAMVATSARAM.put("vishvavasu", "విశ్వావసు / Vishvavasu");
+        SAMVATSARAM.put("parabhava", "పరాభవ / Parabhava");
+        SAMVATSARAM.put("plavanga", "ప్లవంగ / Plavanga");
+        SAMVATSARAM.put("kilaka", "కీలక / Kilaka");
+        SAMVATSARAM.put("keelaka", "కీలక / Kilaka");
+        SAMVATSARAM.put("saumya", "సౌమ్య / Saumya");
+        SAMVATSARAM.put("soumya", "సౌమ్య / Saumya");
+        SAMVATSARAM.put("sadharana", "సాధారణ / Sadharana");
+        SAMVATSARAM.put("virodhikrit", "విరోధికృత్ / Virodhikrit");
+        SAMVATSARAM.put("paridhavi", "పరిధావి / Paridhavi");
+        SAMVATSARAM.put("pramadi", "ప్రమాది / Pramadi");
+        SAMVATSARAM.put("ananda", "ఆనంద / Ananda");
+        SAMVATSARAM.put("rakshasa", "రాక్షస / Rakshasa");
+        SAMVATSARAM.put("nala", "నల / Nala");
+        SAMVATSARAM.put("pingala", "పింగళ / Pingala");
+        SAMVATSARAM.put("kalayukthi", "కాలయుక్తి / Kalayukthi");
+        SAMVATSARAM.put("kalayukti", "కాలయుక్తి / Kalayukthi");
+        SAMVATSARAM.put("siddharthi", "సిద్ధార్థి / Siddharthi");
+        SAMVATSARAM.put("raudri", "రౌద్రి / Raudri");
+        SAMVATSARAM.put("durmati", "దుర్మతి / Durmati");
+        SAMVATSARAM.put("dundubhi", "దుందుభి / Dundubhi");
+        SAMVATSARAM.put("rudhirodgari", "రుధిరోద్గారి / Rudhirodgari");
+        SAMVATSARAM.put("raktakshi", "రక్తాక్షి / Raktakshi");
+        SAMVATSARAM.put("krodhana", "క్రోధన / Krodhana");
+        SAMVATSARAM.put("akshaya", "అక్షయ / Akshaya");
+    }
+
+    private static void loadAyanam() {
+        AYANAM.put("uttarayana", "ఉత్తరాయణం / Uttarayana");
+        AYANAM.put("uttaraayana", "ఉత్తరాయణం / Uttarayana");
+        AYANAM.put("uttarayanam", "ఉత్తరాయణం / Uttarayana");
+        AYANAM.put("uttara ayana", "ఉత్తరాయణం / Uttarayana");
+        AYANAM.put("uttarayan", "ఉత్తరాయణం / Uttarayana");
+        AYANAM.put("north", "ఉత్తరాయణం / Uttarayana");
+        AYANAM.put("northern", "ఉత్తరాయణం / Uttarayana");
+
+        AYANAM.put("dakshinayana", "దక్షిణాయనం / Dakshinayana");
+        AYANAM.put("dakshinaayana", "దక్షిణాయనం / Dakshinayana");
+        AYANAM.put("dakshinayanam", "దక్షిణాయనం / Dakshinayana");
+        AYANAM.put("dakshina ayana", "దక్షిణాయనం / Dakshinayana");
+        AYANAM.put("dakshinayan", "దక్షిణాయనం / Dakshinayana");
+        AYANAM.put("south", "దక్షిణాయనం / Dakshinayana");
+        AYANAM.put("southern", "దక్షిణాయనం / Dakshinayana");
+    }
+
+    private static void loadRitu() {
+        RITU.put("vasanta", "వసంత ఋతువు / Vasanta Ritu");
+        RITU.put("vasantha", "వసంత ఋతువు / Vasanta Ritu");
+        RITU.put("spring", "వసంత ఋతువు / Vasanta Ritu");
+
+        RITU.put("grishma", "గ్రీష్మ ఋతువు / Grishma Ritu");
+        RITU.put("greeshma", "గ్రీష్మ ఋతువు / Grishma Ritu");
+        RITU.put("summer", "గ్రీష్మ ఋతువు / Grishma Ritu");
+
+        RITU.put("varsha", "వర్ష ఋతువు / Varsha Ritu");
+        RITU.put("varsha ritu", "వర్ష ఋతువు / Varsha Ritu");
+        RITU.put("rainy", "వర్ష ఋతువు / Varsha Ritu");
+        RITU.put("monsoon", "వర్ష ఋతువు / Varsha Ritu");
+
+        RITU.put("sharad", "శరదృతువు / Sharad Ritu");
+        RITU.put("sharat", "శరదృతువు / Sharad Ritu");
+        RITU.put("autumn", "శరదృతువు / Sharad Ritu");
+
+        RITU.put("hemanta", "హేమంత ఋతువు / Hemanta Ritu");
+        RITU.put("hemantha", "హేమంత ఋతువు / Hemanta Ritu");
+        RITU.put("pre winter", "హేమంత ఋతువు / Hemanta Ritu");
+        RITU.put("pre-winter", "హేమంత ఋతువు / Hemanta Ritu");
+
+        RITU.put("shishira", "శిశిర ఋతువు / Shishira Ritu");
+        RITU.put("sisira", "శిశిర ఋతువు / Shishira Ritu");
+        RITU.put("winter", "శిశిర ఋతువు / Shishira Ritu");
     }
 
     private record PanchangPlace(
