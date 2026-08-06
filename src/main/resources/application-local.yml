@@ -30,3 +30,4 @@ kundli-api:
   api-key: ka_free_c196f009a097a8bd061c7217a8d7ae9f8e440fd4c6067d58
   astro-data-path: ${KUNDLI_ASTRO_DATA_PATH:/api/astro/get_astro_data}
   panchang-path: ${KUNDLI_PANCHANG_PATH:/api/panchang/get_panchang_data}
+  horoscope-path: ${KUNDLI_HOROSCOPE_PATH:/api/horoscope/get_horoscope}

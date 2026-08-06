@@ -37,6 +37,7 @@ kundli-api:
   api-key: ${KUNDLI_API_KEY:}
   astro-data-path: ${KUNDLI_ASTRO_DATA_PATH:/api/astro/get_astro_data}
   panchang-path: ${KUNDLI_PANCHANG_PATH:/api/panchang/get_panchang_data}
+  horoscope-path: ${KUNDLI_HOROSCOPE_PATH:/api/horoscope/get_horoscope}
 
 location:
   search:
