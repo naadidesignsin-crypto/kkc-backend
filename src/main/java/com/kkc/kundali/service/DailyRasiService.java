@@ -17,21 +17,22 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import static org.springframework.http.HttpStatus.BAD_GATEWAY;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
+import static org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR;
 
 @Service
 public class DailyRasiService {
 
-    private static final String STYLE = "TELUGU_ANDHRA_TELANGANA";
-    private static final String LANGUAGE = "te-en";
     private static final String DEFAULT_PLACE_KEY = "hyderabad";
     private static final String DEFAULT_RASI_KEY = "mesha";
-    private static final String DEFAULT_HOROSCOPE_PATH = "/api/horoscope/get_horoscope";
+    private static final String DEFAULT_HOROSCOPE_PATH =
+            "/api/horoscope/get_horoscope";
 
     private final KundliApiProperties properties;
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
-    private final Map<String, RasiOptionInternal> rasis;
+    private final Map<String, RasiInfo> rasis;
     private final Map<String, RasiPlace> places;
 
     public DailyRasiService(
@@ -53,381 +54,389 @@ public class DailyRasiService {
             String place
     ) {
         LocalDate effectiveDate = date == null ? LocalDate.now() : date;
-        RasiOptionInternal effectiveRasi = resolveRasi(rasi);
+        RasiInfo effectiveRasi = resolveRasi(rasi);
         RasiPlace effectivePlace = resolvePlace(place);
 
-        JsonNode providerResponse = tryCallProvider(
-                effectiveDate,
-                effectiveRasi,
-                effectivePlace
-        );
-
-        if (providerResponse != null) {
-            DailyRasiResponse mapped = mapProviderResponse(
-                    effectiveDate,
-                    effectiveRasi,
-                    effectivePlace,
-                    providerResponse
+        if (properties.getApiKey() == null || properties.getApiKey().isBlank()) {
+            throw new ResponseStatusException(
+                    INTERNAL_SERVER_ERROR,
+                    "Kundli API key is not configured. Set KUNDLI_API_KEY in backend environment."
             );
-
-            if (hasMeaningfulProviderContent(mapped)) {
-                return mapped;
-            }
         }
 
-        return fallbackResponse(effectiveDate, effectiveRasi, effectivePlace);
+        JsonNode providerResponse = null;
+
+        try {
+            providerResponse = callKundliApi(
+                    buildProviderRequest(effectiveDate, effectiveRasi, effectivePlace)
+            );
+        } catch (ResponseStatusException ex) {
+            /*
+             * Do not break homepage with raw provider failure.
+             * We return a clean fallback response instead.
+             */
+        }
+
+        return mapResponse(effectiveDate, effectiveRasi, effectivePlace, providerResponse);
     }
 
-    private JsonNode tryCallProvider(
-            LocalDate date,
-            RasiOptionInternal rasi,
-            RasiPlace place
-    ) {
-        if (properties.getApiKey() == null || properties.getApiKey().isBlank()) {
-            return null;
-        }
-
+    private JsonNode callKundliApi(Map<String, Object> providerRequest) {
         String endpointPath = properties.getHoroscopePath();
 
         if (endpointPath == null || endpointPath.isBlank()) {
             endpointPath = DEFAULT_HOROSCOPE_PATH;
         }
 
-        Map<String, Object> requestBody = buildProviderRequest(date, rasi, place);
-
         try {
             return restClient.post()
                     .uri(endpointPath)
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("X-Api-Key", properties.getApiKey())
-                    .body(requestBody)
+                    .body(providerRequest)
                     .retrieve()
                     .body(JsonNode.class);
         } catch (RestClientResponseException ex) {
-            return null;
+            throw new ResponseStatusException(
+                    BAD_GATEWAY,
+                    "Kundli Horoscope API failed: "
+                            + ex.getStatusCode()
+                            + " - "
+                            + ex.getResponseBodyAsString(),
+                    ex
+            );
         } catch (Exception ex) {
-            return null;
+            throw new ResponseStatusException(
+                    BAD_GATEWAY,
+                    "Kundli Horoscope API failed: " + ex.getMessage(),
+                    ex
+            );
         }
+    }
+
+    private DailyRasiResponse mapResponse(
+            LocalDate date,
+            RasiInfo rasi,
+            RasiPlace place,
+            JsonNode providerResponse
+    ) {
+        JsonNode responseForRasi = findRasiNode(providerResponse, rasi);
+
+        if (responseForRasi == null) {
+            responseForRasi = providerResponse;
+        }
+
+        DailyRasiResponse.DailyRasiSection daily = buildSection(
+                responseForRasi,
+                "Daily Prediction",
+                List.of(
+                        "daily",
+                        "today",
+                        "todayPrediction",
+                        "dailyPrediction",
+                        "daily_prediction",
+                        "dailyHoroscope",
+                        "daily_horoscope",
+                        "prediction",
+                        "overview",
+                        "description"
+                )
+        );
+
+        DailyRasiResponse.DailyRasiSection weekly = buildSection(
+                responseForRasi,
+                "Weekly Prediction",
+                List.of(
+                        "weekly",
+                        "week",
+                        "weeklyPrediction",
+                        "weekly_prediction",
+                        "weeklyHoroscope",
+                        "weekly_horoscope"
+                )
+        );
+
+        DailyRasiResponse.DailyRasiSection monthly = buildSection(
+                responseForRasi,
+                "Monthly Prediction",
+                List.of(
+                        "monthly",
+                        "month",
+                        "monthlyPrediction",
+                        "monthly_prediction",
+                        "monthlyHoroscope",
+                        "monthly_horoscope"
+                )
+        );
+
+        if (isEmptySection(daily)) {
+            daily = fallbackSection(
+                    "Daily Prediction",
+                    rasi.displayName()
+                            + " daily prediction is being prepared for this date."
+            );
+        }
+
+        if (isEmptySection(weekly)) {
+            weekly = fallbackSection(
+                    "Weekly Prediction",
+                    rasi.displayName()
+                            + " weekly prediction is being prepared."
+            );
+        }
+
+        if (isEmptySection(monthly)) {
+            monthly = fallbackSection(
+                    "Monthly Prediction",
+                    rasi.displayName()
+                            + " monthly prediction is being prepared."
+            );
+        }
+
+        return DailyRasiResponse.builder()
+                .date(date)
+                .place(place.label())
+                .cityKey(place.key())
+                .rasiKey(rasi.key())
+                .displayName(rasi.displayName())
+                .teluguName(rasi.teluguName())
+                .englishName(rasi.englishName())
+                .zodiacName(rasi.zodiacName())
+                .symbol(rasi.symbol())
+                .language("te-en")
+                .source(providerResponse == null ? "Fallback" : "KundliAPI")
+                .note("Daily, weekly and monthly Rasi Phalalu are normalized from provider JSON into a clean customer-facing format.")
+                .generatedAt(LocalDateTime.now())
+                .daily(daily)
+                .weekly(weekly)
+                .monthly(monthly)
+                .overview(daily.getOverview())
+                .prediction(daily.getOverview())
+                .career(daily.getCareer())
+                .finance(daily.getFinance())
+                .health(daily.getHealth())
+                .family(daily.getFamily())
+                .luckyColor(daily.getLuckyColor())
+                .luckyNumber(daily.getLuckyNumber())
+                .remedy(daily.getRemedy())
+                .supportedRasis(getSupportedRasis())
+                .supportedPlaces(getSupportedPlaces())
+                .build();
+    }
+
+    private DailyRasiResponse.DailyRasiSection buildSection(
+            JsonNode root,
+            String title,
+            List<String> sectionAliases
+    ) {
+        JsonNode sectionNode = null;
+
+        if (root != null) {
+            for (String alias : sectionAliases) {
+                sectionNode = findFirst(root, alias);
+
+                if (sectionNode != null && !sectionNode.isNull()) {
+                    break;
+                }
+            }
+        }
+
+        if (sectionNode == null) {
+            sectionNode = root;
+        }
+
+        String overview = firstCleanText(
+                sectionNode,
+                "overview",
+                "prediction",
+                "description",
+                "content",
+                "text",
+                "summary",
+                "result",
+                "details",
+                "horoscope"
+        );
+
+        String career = firstCleanText(
+                sectionNode,
+                "career",
+                "profession",
+                "job",
+                "work",
+                "business"
+        );
+
+        String finance = firstCleanText(
+                sectionNode,
+                "finance",
+                "money",
+                "wealth",
+                "income"
+        );
+
+        String health = firstCleanText(
+                sectionNode,
+                "health",
+                "wellness"
+        );
+
+        String family = firstCleanText(
+                sectionNode,
+                "family",
+                "relationship",
+                "relationships",
+                "domestic",
+                "home"
+        );
+
+        String love = firstCleanText(
+                sectionNode,
+                "love",
+                "marriage",
+                "romance",
+                "partner"
+        );
+
+        String luckyColor = firstCleanText(
+                sectionNode,
+                "luckyColor",
+                "lucky_color",
+                "color",
+                "lucky_colour",
+                "luckyColour"
+        );
+
+        String luckyNumber = firstCleanText(
+                sectionNode,
+                "luckyNumber",
+                "lucky_number",
+                "number",
+                "luckyNo",
+                "lucky_no"
+        );
+
+        String remedy = firstCleanText(
+                sectionNode,
+                "remedy",
+                "suggestion",
+                "advice",
+                "upay",
+                "pariharam",
+                "remedies"
+        );
+
+        String rawSummary = cleanNodeToText(sectionNode);
+
+        if (overview == null || overview.isBlank()) {
+            overview = rawSummary;
+        }
+
+        return DailyRasiResponse.DailyRasiSection.builder()
+                .title(title)
+                .overview(normalizeLongText(overview))
+                .career(normalizeLongText(career))
+                .finance(normalizeLongText(finance))
+                .health(normalizeLongText(health))
+                .family(normalizeLongText(family))
+                .love(normalizeLongText(love))
+                .luckyColor(normalizeShortText(luckyColor))
+                .luckyNumber(normalizeShortText(luckyNumber))
+                .remedy(normalizeLongText(remedy))
+                .rawSummary(normalizeLongText(rawSummary))
+                .build();
+    }
+
+    private DailyRasiResponse.DailyRasiSection fallbackSection(
+            String title,
+            String message
+    ) {
+        return DailyRasiResponse.DailyRasiSection.builder()
+                .title(title)
+                .overview(message)
+                .rawSummary(message)
+                .build();
+    }
+
+    private boolean isEmptySection(DailyRasiResponse.DailyRasiSection section) {
+        return section == null
+                || isBlank(section.getOverview())
+                || looksLikeRawJson(section.getOverview());
+    }
+
+    private boolean looksLikeRawJson(String value) {
+        if (value == null) {
+            return false;
+        }
+
+        String clean = value.trim();
+
+        return (clean.startsWith("{") && clean.endsWith("}"))
+                || (clean.startsWith("[") && clean.endsWith("]"))
+                || clean.contains("\":")
+                || clean.contains("\\u003c")
+                || clean.contains("&lt;");
     }
 
     private Map<String, Object> buildProviderRequest(
             LocalDate date,
-            RasiOptionInternal rasi,
+            RasiInfo rasi,
             RasiPlace place
     ) {
         Map<String, Object> body = new LinkedHashMap<>();
+
         body.put("day", date.getDayOfMonth());
         body.put("month", date.getMonthValue());
         body.put("year", date.getYear());
+
         body.put("date", date.toString());
         body.put("rasi", rasi.key());
-        body.put("rashi", rasi.english());
-        body.put("sign", rasi.english());
-        body.put("zodiac", rasi.english());
+        body.put("sign", rasi.zodiacName());
+        body.put("zodiac", rasi.zodiacName());
+        body.put("moon_sign", rasi.zodiacName());
+
         body.put("place", place.label());
         body.put("lat", place.latitude());
         body.put("lon", place.longitude());
         body.put("tzone", 5.5);
         body.put("lang", "en");
+
         return body;
     }
 
-    private DailyRasiResponse mapProviderResponse(
-            LocalDate date,
-            RasiOptionInternal rasi,
-            RasiPlace place,
-            JsonNode response
-    ) {
-        return DailyRasiResponse.builder()
-                .date(date)
-                .place(place.label())
-                .cityKey(place.key())
-                .latitude(place.latitude())
-                .longitude(place.longitude())
-                .timezone("Asia/Kolkata")
-                .rasiKey(rasi.key())
-                .rasiTelugu(rasi.telugu())
-                .rasiEnglish(rasi.english())
-                .rasiSanskrit(rasi.sanskrit())
-                .symbol(rasi.symbol())
-                .style(STYLE)
-                .language(LANGUAGE)
-                .overview(firstText(
-                        response,
-                        "overview",
-                        "prediction",
-                        "description",
-                        "dailyPrediction",
-                        "daily_prediction",
-                        "horoscope",
-                        "botResponse",
-                        "bot_response",
-                        "text",
-                        "summary"
-                ))
-                .career(firstText(response, "career", "profession", "job", "work"))
-                .finance(firstText(response, "finance", "money", "wealth", "income"))
-                .health(firstText(response, "health", "wellness"))
-                .familyAndRelationships(firstText(
-                        response,
-                        "family",
-                        "relationship",
-                        "relationships",
-                        "love",
-                        "marriage"
-                ))
-                .luckyColor(firstText(
-                        response,
-                        "luckyColor",
-                        "lucky_color",
-                        "color",
-                        "colour"
-                ))
-                .luckyNumber(firstText(
-                        response,
-                        "luckyNumber",
-                        "lucky_number",
-                        "number"
-                ))
-                .remedy(firstText(
-                        response,
-                        "remedy",
-                        "suggestion",
-                        "advice",
-                        "tip"
-                ))
-                .source("KundliAPI")
-                .note("Daily Rasi Phalalu is requested from provider by selected date, rasi and place. If provider returns limited fields, unavailable sections are shown as '-'.")
-                .generatedAt(LocalDateTime.now())
-                .supportedRasis(getSupportedRasis())
-                .build();
-    }
-
-    private boolean hasMeaningfulProviderContent(DailyRasiResponse response) {
-        return hasText(response.getOverview())
-                || hasText(response.getCareer())
-                || hasText(response.getFinance())
-                || hasText(response.getHealth())
-                || hasText(response.getFamilyAndRelationships())
-                || hasText(response.getRemedy());
-    }
-
-    private DailyRasiResponse fallbackResponse(
-            LocalDate date,
-            RasiOptionInternal rasi,
-            RasiPlace place
-    ) {
-        return DailyRasiResponse.builder()
-                .date(date)
-                .place(place.label())
-                .cityKey(place.key())
-                .latitude(place.latitude())
-                .longitude(place.longitude())
-                .timezone("Asia/Kolkata")
-                .rasiKey(rasi.key())
-                .rasiTelugu(rasi.telugu())
-                .rasiEnglish(rasi.english())
-                .rasiSanskrit(rasi.sanskrit())
-                .symbol(rasi.symbol())
-                .style(STYLE)
-                .language(LANGUAGE)
-                .overview("Daily Rasi details for this date are being prepared. Configure a rasi-based daily horoscope provider endpoint to show live predictions here.")
-                .career("-")
-                .finance("-")
-                .health("-")
-                .familyAndRelationships("-")
-                .luckyColor("-")
-                .luckyNumber("-")
-                .remedy("-")
-                .source("KKC_FALLBACK")
-                .note("Provider did not return a rasi-based daily prediction. KundliAPI path can be configured using KUNDLI_HOROSCOPE_PATH.")
-                .generatedAt(LocalDateTime.now())
-                .supportedRasis(getSupportedRasis())
-                .build();
-    }
-
-    public List<DailyRasiResponse.DailyRasiOption> getSupportedRasis() {
-        return rasis.values().stream()
-                .map(rasi -> DailyRasiResponse.DailyRasiOption.builder()
-                        .key(rasi.key())
-                        .telugu(rasi.telugu())
-                        .english(rasi.english())
-                        .sanskrit(rasi.sanskrit())
-                        .symbol(rasi.symbol())
-                        .build())
-                .toList();
-    }
-
-    private RasiOptionInternal resolveRasi(String value) {
-        if (value == null || value.isBlank()) {
-            return rasis.get(DEFAULT_RASI_KEY);
+    private JsonNode findRasiNode(JsonNode root, RasiInfo rasi) {
+        if (root == null || root.isNull()) {
+            return null;
         }
 
-        String key = normalizeKey(value);
-        RasiOptionInternal direct = rasis.get(key);
-
-        if (direct != null) {
-            return direct;
-        }
-
-        RasiOptionInternal matched = rasis.values().stream()
-                .filter(item -> normalizeKey(item.english()).equals(key)
-                        || normalizeKey(item.sanskrit()).equals(key)
-                        || normalizeKey(item.telugu()).equals(key))
-                .findFirst()
-                .orElse(null);
-
-        if (matched != null) {
-            return matched;
-        }
-
-        throw new ResponseStatusException(
-                BAD_REQUEST,
-                "Unsupported Rasi. Supported values: "
-                        + String.join(", ", rasis.keySet())
+        List<String> aliases = List.of(
+                rasi.key(),
+                rasi.englishName(),
+                rasi.zodiacName(),
+                rasi.teluguName(),
+                rasi.zodiacName().toLowerCase(Locale.ENGLISH)
         );
-    }
 
-    private RasiPlace resolvePlace(String place) {
-        if (place == null || place.isBlank()) {
-            return places.get(DEFAULT_PLACE_KEY);
+        for (String alias : aliases) {
+            JsonNode found = findFirst(root, alias);
+
+            if (found != null && !found.isNull() && found.isContainerNode()) {
+                return found;
+            }
         }
 
-        String key = normalizeKey(place);
-        RasiPlace resolved = places.get(key);
-
-        if (resolved != null) {
-            return resolved;
-        }
-
-        RasiPlace matchedByLabel = places.values().stream()
-                .filter(item -> item.label().toLowerCase(Locale.ENGLISH)
-                        .contains(place.trim().toLowerCase(Locale.ENGLISH)))
-                .findFirst()
-                .orElse(null);
-
-        if (matchedByLabel != null) {
-            return matchedByLabel;
-        }
-
-        throw new ResponseStatusException(
-                BAD_REQUEST,
-                "Unsupported Rasi place. Supported values: "
-                        + String.join(", ", places.keySet())
-        );
+        return null;
     }
 
-    private Map<String, RasiOptionInternal> buildRasis() {
-        Map<String, RasiOptionInternal> map = new LinkedHashMap<>();
-
-        addRasi(map, "mesha", "మేషం", "Mesha", "Aries", "♈");
-        addRasi(map, "vrishabha", "వృషభం", "Vrishabha", "Taurus", "♉");
-        addRasi(map, "mithuna", "మిథునం", "Mithuna", "Gemini", "♊");
-        addRasi(map, "karkataka", "కర్కాటకం", "Karkataka", "Cancer", "♋");
-        addRasi(map, "simha", "సింహం", "Simha", "Leo", "♌");
-        addRasi(map, "kanya", "కన్య", "Kanya", "Virgo", "♍");
-        addRasi(map, "tula", "తుల", "Tula", "Libra", "♎");
-        addRasi(map, "vrischika", "వృశ్చికం", "Vrischika", "Scorpio", "♏");
-        addRasi(map, "dhanu", "ధనుస్సు", "Dhanu", "Sagittarius", "♐");
-        addRasi(map, "makara", "మకరం", "Makara", "Capricorn", "♑");
-        addRasi(map, "kumbha", "కుంభం", "Kumbha", "Aquarius", "♒");
-        addRasi(map, "meena", "మీనం", "Meena", "Pisces", "♓");
-
-        addAlias(map, "aries", "mesha");
-        addAlias(map, "taurus", "vrishabha");
-        addAlias(map, "gemini", "mithuna");
-        addAlias(map, "cancer", "karkataka");
-        addAlias(map, "leo", "simha");
-        addAlias(map, "virgo", "kanya");
-        addAlias(map, "libra", "tula");
-        addAlias(map, "scorpio", "vrischika");
-        addAlias(map, "sagittarius", "dhanu");
-        addAlias(map, "capricorn", "makara");
-        addAlias(map, "aquarius", "kumbha");
-        addAlias(map, "pisces", "meena");
-
-        addAlias(map, "vrushabha", "vrishabha");
-        addAlias(map, "karkatakam", "karkataka");
-        addAlias(map, "vrishchika", "vrischika");
-        addAlias(map, "dhanus", "dhanu");
-        addAlias(map, "meenam", "meena");
-
-        return map;
-    }
-
-    private void addRasi(
-            Map<String, RasiOptionInternal> map,
-            String key,
-            String telugu,
-            String sanskrit,
-            String english,
-            String symbol
-    ) {
-        map.put(key, new RasiOptionInternal(
-                key,
-                telugu,
-                english,
-                sanskrit,
-                symbol
-        ));
-    }
-
-    private void addAlias(
-            Map<String, RasiOptionInternal> map,
-            String alias,
-            String targetKey
-    ) {
-        RasiOptionInternal target = map.get(targetKey);
-
-        if (target != null) {
-            map.put(alias, target);
-        }
-    }
-
-    private Map<String, RasiPlace> buildPlaces() {
-        Map<String, RasiPlace> map = new LinkedHashMap<>();
-
-        addPlace(map, "hyderabad", "Hyderabad, Telangana", "Telangana",
-                17.3850, 78.4867);
-        addPlace(map, "warangal", "Warangal, Telangana", "Telangana",
-                17.9689, 79.5941);
-        addPlace(map, "vijayawada", "Vijayawada, Andhra Pradesh",
-                "Andhra Pradesh", 16.5062, 80.6480);
-        addPlace(map, "tirupati", "Tirupati, Andhra Pradesh",
-                "Andhra Pradesh", 13.6288, 79.4192);
-        addPlace(map, "visakhapatnam", "Visakhapatnam, Andhra Pradesh",
-                "Andhra Pradesh", 17.6868, 83.2185);
-        addPlace(map, "guntur", "Guntur, Andhra Pradesh",
-                "Andhra Pradesh", 16.3067, 80.4365);
-        addPlace(map, "rajahmundry", "Rajahmundry, Andhra Pradesh",
-                "Andhra Pradesh", 17.0005, 81.8040);
-        addPlace(map, "nellore", "Nellore, Andhra Pradesh",
-                "Andhra Pradesh", 14.4426, 79.9865);
-
-        return map;
-    }
-
-    private void addPlace(
-            Map<String, RasiPlace> map,
-            String key,
-            String label,
-            String state,
-            double latitude,
-            double longitude
-    ) {
-        map.put(key, new RasiPlace(key, label, state, latitude, longitude));
-    }
-
-    private String firstText(JsonNode root, String... aliases) {
-        if (root == null || root.isMissingNode() || root.isNull()) {
+    private String firstCleanText(JsonNode root, String... aliases) {
+        if (root == null || root.isNull()) {
             return null;
         }
 
         for (String alias : aliases) {
             JsonNode value = findFirst(root, alias);
-            String text = formatValue(value);
+            String text = cleanNodeToText(value);
 
-            if (hasText(text)) {
+            if (!isBlank(text) && !looksLikeRawJson(text)) {
                 return text;
             }
         }
@@ -484,71 +493,341 @@ public class DailyRasiService {
         return null;
     }
 
-    private String formatValue(JsonNode node) {
+    private String cleanNodeToText(JsonNode node) {
         if (node == null || node.isNull() || node.isMissingNode()) {
             return null;
         }
 
         if (node.isTextual() || node.isNumber() || node.isBoolean()) {
-            return cleanText(node.asText());
+            return cleanProviderText(node.asText());
         }
 
         if (node.isArray()) {
             StringBuilder builder = new StringBuilder();
 
             for (JsonNode child : node) {
-                String text = formatValue(child);
+                String text = cleanNodeToText(child);
 
-                if (hasText(text)) {
-                    if (!builder.isEmpty()) {
-                        builder.append(" ");
-                    }
-
-                    builder.append(text);
+                if (!isBlank(text)) {
+                    appendLine(builder, text);
                 }
             }
 
-            return builder.isEmpty() ? null : builder.toString();
+            return builder.toString().trim();
         }
 
         if (node.isObject()) {
-            String name = firstObjectValue(
-                    node,
-                    "name",
-                    "value",
-                    "display",
-                    "text",
-                    "description",
-                    "prediction",
-                    "content"
-            );
+            StringBuilder builder = new StringBuilder();
 
-            if (hasText(name)) {
-                return name;
+            var fields = node.fields();
+
+            while (fields.hasNext()) {
+                Map.Entry<String, JsonNode> field = fields.next();
+                String fieldName = readableLabel(field.getKey());
+                String fieldValue = cleanNodeToText(field.getValue());
+
+                if (!isBlank(fieldValue) && !looksLikeTechnicalField(field.getKey())) {
+                    appendLine(builder, fieldName + ": " + fieldValue);
+                }
             }
+
+            return builder.toString().trim();
         }
 
         try {
-            return objectMapper.writeValueAsString(node);
+            return cleanProviderText(objectMapper.writeValueAsString(node));
         } catch (Exception ex) {
-            return node.toString();
+            return cleanProviderText(node.toString());
         }
     }
 
-    private String firstObjectValue(JsonNode node, String... aliases) {
-        for (String alias : aliases) {
-            JsonNode value = findFirst(node, alias);
+    private boolean looksLikeTechnicalField(String key) {
+        String normalized = normalizeKey(key);
 
-            if (value != null && value.isValueNode()) {
-                String text = cleanText(value.asText());
+        return normalized.equals("id")
+                || normalized.equals("uuid")
+                || normalized.equals("status")
+                || normalized.equals("code")
+                || normalized.equals("success")
+                || normalized.equals("error")
+                || normalized.equals("errors")
+                || normalized.equals("meta")
+                || normalized.equals("metadata")
+                || normalized.equals("request")
+                || normalized.equals("response");
+    }
 
-                if (hasText(text)) {
-                    return text;
-                }
-            }
+    private String cleanProviderText(String value) {
+        if (value == null) {
+            return null;
         }
 
-        return null;
+        String clean = value;
+
+        clean = decodeUnicodeEscapes(clean);
+        clean = decodeHtmlEntities(clean);
+
+        clean = clean.replaceAll("(?i)<br\\s*/?>", "\n");
+        clean = clean.replaceAll("(?i)</p>", "\n");
+        clean = clean.replaceAll("(?i)</div>", "\n");
+        clean = clean.replaceAll("(?i)</li>", "\n");
+        clean = clean.replaceAll("(?i)<li>", "• ");
+        clean = clean.replaceAll("<[^>]*>", " ");
+
+        clean = clean.replace("\\n", "\n");
+        clean = clean.replace("\\r", "\n");
+        clean = clean.replace("\\t", " ");
+
+        clean = clean.replace("{", " ");
+        clean = clean.replace("}", " ");
+        clean = clean.replace("[", " ");
+        clean = clean.replace("]", " ");
+        clean = clean.replace("\"", " ");
+
+        clean = clean.replaceAll("(?m)^\\s*[,]+\\s*", "");
+        clean = clean.replaceAll("\\s*:\\s*", ": ");
+        clean = clean.replaceAll("[ \\t]{2,}", " ");
+        clean = clean.replaceAll("\\n\\s+", "\n");
+        clean = clean.replaceAll("\\s+\\n", "\n");
+        clean = clean.replaceAll("\\n{3,}", "\n\n");
+
+        clean = clean.trim();
+
+        return clean.isBlank() ? null : clean;
+    }
+
+    private String normalizeLongText(String value) {
+        String clean = cleanProviderText(value);
+
+        if (clean == null) {
+            return null;
+        }
+
+        if (looksLikeRawJson(clean)) {
+            return null;
+        }
+
+        return clean;
+    }
+
+    private String normalizeShortText(String value) {
+        String clean = normalizeLongText(value);
+
+        if (clean == null) {
+            return null;
+        }
+
+        if (clean.length() > 120) {
+            return clean.substring(0, 120).trim();
+        }
+
+        return clean;
+    }
+
+    private String decodeHtmlEntities(String value) {
+        return value
+                .replace("&nbsp;", " ")
+                .replace("&amp;", "&")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&quot;", "\"")
+                .replace("&#39;", "'")
+                .replace("&apos;", "'");
+    }
+
+    private String decodeUnicodeEscapes(String value) {
+        String clean = value;
+
+        clean = clean.replace("\\u003c", "<");
+        clean = clean.replace("\\u003C", "<");
+        clean = clean.replace("\\u003e", ">");
+        clean = clean.replace("\\u003E", ">");
+        clean = clean.replace("\\u0026", "&");
+        clean = clean.replace("\\u0022", "\"");
+        clean = clean.replace("\\u0027", "'");
+
+        return clean;
+    }
+
+    private String readableLabel(String key) {
+        if (key == null || key.isBlank()) {
+            return "Details";
+        }
+
+        String spaced = key
+                .replace("_", " ")
+                .replace("-", " ")
+                .replaceAll("([a-z])([A-Z])", "$1 $2")
+                .trim();
+
+        if (spaced.isBlank()) {
+            return "Details";
+        }
+
+        return spaced.substring(0, 1).toUpperCase(Locale.ENGLISH)
+                + spaced.substring(1);
+    }
+
+    private void appendLine(StringBuilder builder, String value) {
+        if (builder.length() > 0) {
+            builder.append("\n");
+        }
+
+        builder.append(value);
+    }
+
+    private RasiInfo resolveRasi(String rasi) {
+        if (rasi == null || rasi.isBlank()) {
+            return rasis.get(DEFAULT_RASI_KEY);
+        }
+
+        String key = cleanKey(rasi);
+        RasiInfo resolved = rasis.get(key);
+
+        if (resolved != null) {
+            return resolved;
+        }
+
+        RasiInfo matched = rasis.values().stream()
+                .filter(item -> normalizeKey(item.displayName()).contains(key)
+                        || normalizeKey(item.englishName()).contains(key)
+                        || normalizeKey(item.zodiacName()).contains(key)
+                        || normalizeKey(item.teluguName()).contains(key))
+                .findFirst()
+                .orElse(null);
+
+        if (matched != null) {
+            return matched;
+        }
+
+        throw new ResponseStatusException(
+                BAD_REQUEST,
+                "Unsupported Rasi. Supported values: "
+                        + String.join(", ", rasis.keySet())
+        );
+    }
+
+    private RasiPlace resolvePlace(String place) {
+        if (place == null || place.isBlank()) {
+            return places.get(DEFAULT_PLACE_KEY);
+        }
+
+        String key = cleanKey(place);
+        RasiPlace resolved = places.get(key);
+
+        if (resolved != null) {
+            return resolved;
+        }
+
+        RasiPlace matched = places.values().stream()
+                .filter(item -> normalizeKey(item.label()).contains(key))
+                .findFirst()
+                .orElse(null);
+
+        if (matched != null) {
+            return matched;
+        }
+
+        throw new ResponseStatusException(
+                BAD_REQUEST,
+                "Unsupported Rasi place. Supported values: "
+                        + String.join(", ", places.keySet())
+        );
+    }
+
+    public List<DailyRasiResponse.DailyRasiOption> getSupportedRasis() {
+        return rasis.values().stream()
+                .map(rasi -> DailyRasiResponse.DailyRasiOption.builder()
+                        .key(rasi.key())
+                        .teluguName(rasi.teluguName())
+                        .englishName(rasi.englishName())
+                        .zodiacName(rasi.zodiacName())
+                        .symbol(rasi.symbol())
+                        .build())
+                .toList();
+    }
+
+    public List<DailyRasiResponse.DailyRasiPlaceOption> getSupportedPlaces() {
+        return places.values().stream()
+                .map(place -> DailyRasiResponse.DailyRasiPlaceOption.builder()
+                        .key(place.key())
+                        .label(place.label())
+                        .state(place.state())
+                        .build())
+                .toList();
+    }
+
+    private Map<String, RasiInfo> buildRasis() {
+        Map<String, RasiInfo> map = new LinkedHashMap<>();
+
+        addRasi(map, "mesha", "మేషం", "Mesha", "Aries", "♈");
+        addRasi(map, "vrishabha", "వృషభం", "Vrishabha", "Taurus", "♉");
+        addRasi(map, "mithuna", "మిథునం", "Mithuna", "Gemini", "♊");
+        addRasi(map, "karkataka", "కర్కాటకం", "Karkataka", "Cancer", "♋");
+        addRasi(map, "simha", "సింహం", "Simha", "Leo", "♌");
+        addRasi(map, "kanya", "కన్య", "Kanya", "Virgo", "♍");
+        addRasi(map, "tula", "తుల", "Tula", "Libra", "♎");
+        addRasi(map, "vrischika", "వృశ్చికం", "Vrischika", "Scorpio", "♏");
+        addRasi(map, "dhanu", "ధనుస్సు", "Dhanu", "Sagittarius", "♐");
+        addRasi(map, "makara", "మకరం", "Makara", "Capricorn", "♑");
+        addRasi(map, "kumbha", "కుంభం", "Kumbha", "Aquarius", "♒");
+        addRasi(map, "meena", "మీనం", "Meena", "Pisces", "♓");
+
+        return map;
+    }
+
+    private void addRasi(
+            Map<String, RasiInfo> map,
+            String key,
+            String teluguName,
+            String englishName,
+            String zodiacName,
+            String symbol
+    ) {
+        RasiInfo info = new RasiInfo(
+                key,
+                teluguName,
+                englishName,
+                zodiacName,
+                symbol,
+                teluguName + " / " + englishName
+        );
+
+        map.put(key, info);
+        map.put(cleanKey(englishName), info);
+        map.put(cleanKey(zodiacName), info);
+    }
+
+    private Map<String, RasiPlace> buildPlaces() {
+        Map<String, RasiPlace> map = new LinkedHashMap<>();
+
+        addPlace(map, "hyderabad", "Hyderabad, Telangana", "Telangana",
+                17.3850, 78.4867);
+        addPlace(map, "warangal", "Warangal, Telangana", "Telangana",
+                17.9689, 79.5941);
+        addPlace(map, "vijayawada", "Vijayawada, Andhra Pradesh",
+                "Andhra Pradesh", 16.5062, 80.6480);
+        addPlace(map, "tirupati", "Tirupati, Andhra Pradesh",
+                "Andhra Pradesh", 13.6288, 79.4192);
+        addPlace(map, "visakhapatnam", "Visakhapatnam, Andhra Pradesh",
+                "Andhra Pradesh", 17.6868, 83.2185);
+
+        return map;
+    }
+
+    private void addPlace(
+            Map<String, RasiPlace> map,
+            String key,
+            String label,
+            String state,
+            double latitude,
+            double longitude
+    ) {
+        map.put(key, new RasiPlace(key, label, state, latitude, longitude));
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     private String cleanBaseUrl(String value) {
@@ -559,6 +838,10 @@ public class DailyRasiService {
         return value.endsWith("/")
                 ? value.substring(0, value.length() - 1)
                 : value;
+    }
+
+    private String cleanKey(String value) {
+        return normalizeKey(value);
     }
 
     private String normalizeKey(String value) {
@@ -575,25 +858,13 @@ public class DailyRasiService {
                 .replace(" ", "");
     }
 
-    private String cleanText(String value) {
-        if (value == null) {
-            return null;
-        }
-
-        String clean = value.trim();
-        return clean.isBlank() ? null : clean;
-    }
-
-    private boolean hasText(String value) {
-        return value != null && !value.isBlank() && !"-".equals(value.trim());
-    }
-
-    private record RasiOptionInternal(
+    private record RasiInfo(
             String key,
-            String telugu,
-            String english,
-            String sanskrit,
-            String symbol
+            String teluguName,
+            String englishName,
+            String zodiacName,
+            String symbol,
+            String displayName
     ) {
     }
 

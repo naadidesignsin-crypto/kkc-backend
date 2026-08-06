@@ -20,32 +20,58 @@ public class DailyRasiResponse {
     private LocalDate date;
     private String place;
     private String cityKey;
-    private Double latitude;
-    private Double longitude;
-    private String timezone;
 
     private String rasiKey;
-    private String rasiTelugu;
-    private String rasiEnglish;
-    private String rasiSanskrit;
+    private String displayName;
+    private String teluguName;
+    private String englishName;
+    private String zodiacName;
     private String symbol;
 
-    private String style;
     private String language;
+    private String source;
+    private String note;
+    private LocalDateTime generatedAt;
 
+    private DailyRasiSection daily;
+    private DailyRasiSection weekly;
+    private DailyRasiSection monthly;
+
+    /*
+     * Backward-compatible fields for older frontend code.
+     * New frontend should use daily / weekly / monthly sections.
+     */
     private String overview;
+    private String prediction;
     private String career;
     private String finance;
     private String health;
-    private String familyAndRelationships;
+    private String family;
     private String luckyColor;
     private String luckyNumber;
     private String remedy;
-    private String source;
-    private String note;
 
-    private LocalDateTime generatedAt;
     private List<DailyRasiOption> supportedRasis;
+    private List<DailyRasiPlaceOption> supportedPlaces;
+
+    @Getter
+    @Setter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DailyRasiSection {
+        private String title;
+        private String overview;
+        private String career;
+        private String finance;
+        private String health;
+        private String family;
+        private String love;
+        private String luckyColor;
+        private String luckyNumber;
+        private String remedy;
+        private String rawSummary;
+    }
 
     @Getter
     @Setter
@@ -54,9 +80,20 @@ public class DailyRasiResponse {
     @AllArgsConstructor
     public static class DailyRasiOption {
         private String key;
-        private String telugu;
-        private String english;
-        private String sanskrit;
+        private String teluguName;
+        private String englishName;
+        private String zodiacName;
         private String symbol;
+    }
+
+    @Getter
+    @Setter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DailyRasiPlaceOption {
+        private String key;
+        private String label;
+        private String state;
     }
 }
